@@ -1,0 +1,22 @@
+# A one-minute check: does this fork get a GitHub-hosted macOS runner at all,
+# and what Xcode versions are installed on it.
+name: Runner probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Report
+        run: |
+          sw_vers
+          xcodebuild -version
+          ls /Applications | grep -i "Xcode" || true
+          echo "---arm64/rosetta---"
+          uname -m
