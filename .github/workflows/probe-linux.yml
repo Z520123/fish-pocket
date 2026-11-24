@@ -1,0 +1,9 @@
+name: Linux probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "linux runner works"; uname -a
