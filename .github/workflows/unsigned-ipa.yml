@@ -10,6 +10,9 @@ on:
     paths:
       - ".github/workflows/unsigned-ipa.yml"
   workflow_dispatch:
+  schedule:
+    # 07:00 UTC: 15:00 Beijing, 02:00 US Eastern — the emptiest macOS pool.
+    - cron: "0 7 * * *"
 
 permissions:
   contents: read
