@@ -63,6 +63,8 @@ private struct SettingsList: View {
     @State private var languageChanged = false
     @AppStorage(BackgroundKeeper.continuedKey) private var continuedProcessing = false
     @AppStorage(WidgetSnapshotWriter.showTitlesKey) private var widgetTitles = true
+    /// 聊天页右下角的桌宠（dsh-Go 的 Deepy 小鲸鱼）。
+    @AppStorage("dsh.pet.visible") private var petVisible = true
     /// Pushed from the 探索 tab rather than the root of the sheet (`SettingsView.pushed`).
     let pushed: Bool
 
@@ -176,6 +178,14 @@ private struct SettingsList: View {
                 Text("关掉后，主屏幕和锁屏小组件只显示数量和状态。设备锁定时，标题总会被打码。")
             }
             .onChange(of: widgetTitles) { WidgetSnapshotWriter.shared.refresh() }
+
+            Section {
+                Toggle(isOn: $petVisible) { Label("桌宠", systemImage: "pawprint") }
+            } header: {
+                Text("宠物")
+            } footer: {
+                Text("聊天页右下角的小鲸鱼（Deepy），点一下有反应。宠物包来自 dsh-Go 开源仓库。")
+            }
 
             Section {
                 if let theme = mirror.namespace("ui-theme") {
