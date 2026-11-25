@@ -44,7 +44,13 @@ private struct SettingsSheet: View {
     var onClose: (() -> Void)?
 
     var body: some View {
-        NavigationStack { SettingsList(pushed: false).closeButton(onClose ?? dismiss) }
+        NavigationStack {
+            if let onClose {
+                SettingsList(pushed: false).closeButton(action: onClose)
+            } else {
+                SettingsList(pushed: false).closeButton(dismiss)
+            }
+        }
             // 设置 and every page pushed or presented from it: the system's lists, not the monochrome ones.
             .settingsStyle()
     }
