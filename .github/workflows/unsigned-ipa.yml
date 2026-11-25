@@ -97,6 +97,37 @@ jobs:
       - name: Assemble engine
         run: scripts/build-engine.sh
 
+      # The phone's Rust library: pairing, developer-image mounting and the runner. Its
+      # build is the slow part, so it is cached by Cargo.lock and skipped when it hits.
+      - name: Rust toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-apple-ios
+
+      - name: Fetch idevice
+        run: bash native/poki-launcher/fetch-idevice.sh
+
+      - name: Cache cargo
+        id: cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/poki-launcher/target
+          key: cargo-${{ hashFiles('native/poki-launcher/Cargo.lock') }}
+
+      - name: Build the launcher
+        run: |
+          set -euo pipefail
+          cargo build --release --target aarch64-apple-ios --manifest-path native/poki-launcher/Cargo.toml
+          lib=native/poki-launcher/target/aarch64-apple-ios/release/libpoki_launcher.a
+          ls -la "$lib"
+          (nm -g "$lib" | grep -E '_poki_(launcher|pair|string)_' | sort -u) || echo "no poki_ symbols listed"
+          mkdir -p vendor/poki-launcher
+          cp "$lib" vendor/poki-launcher/
+
       - name: Generate project
         run: |
           command -v xcodegen >/dev/null || brew install xcodegen
