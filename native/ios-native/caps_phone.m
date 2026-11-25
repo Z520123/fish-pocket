@@ -14,6 +14,23 @@
 #import "../poki-phone/InProcess.h"
 #import "DshIOS-Swift.h"
 
+// 智能体用完之后未必会叫 phone_stop，而会话一开着 iOS 就一直显示「Automation Running」。
+// 所以每一次用到会话的操作都重新计一次时，空闲到这个秒数就自己把会话关掉。
+static const int64_t DshPhoneIdleSeconds = 180;
+static NSUInteger DshPhoneIdleGeneration = 0;
+
+static void DshPhoneArmIdleClose(void) {
+  @synchronized ([PKInProcess class]) { DshPhoneIdleGeneration += 1; }
+  NSUInteger mine = DshPhoneIdleGeneration;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, DshPhoneIdleSeconds * NSEC_PER_SEC),
+                 dispatch_get_main_queue(), ^{
+    @synchronized ([PKInProcess class]) {
+      if (DshPhoneIdleGeneration != mine) return;
+    }
+    [[PKInProcess shared] close];
+  });
+}
+
 /// PKInProcess blocks on every call and one session operation should be in flight at a
 /// time, so the operations of this capability take turns.
 static NSLock *PhoneLock(void) {
@@ -186,8 +203,11 @@ void dsh_native_phone(NSString *op, NSDictionary *args, DshNativeReply reply) {
     return;
   }
   if ([op isEqualToString:@"stop"]) {
+    // 先关自动化会话：XCTest 的会话不关，iOS 顶端那条「Automation Running」就不会消失，
+    // 用户会一直看到「被控制」。关会话在 close 里做完（连同 Automation Mode），再收 launcher。
+    NSDictionary *closed = [[PKInProcess shared] close] ?: @{};
     [[PhoneLink shared] stopDevice];
-    reply(@{@"ok": @YES}, nil);
+    reply(@{@"ok": @YES, @"session": closed}, nil);
     return;
   }
   if ([op isEqualToString:@"pair"]) {
@@ -196,6 +216,7 @@ void dsh_native_phone(NSString *op, NSDictionary *args, DshNativeReply reply) {
     return;
   }
 
+  DshPhoneArmIdleClose();
   [PhoneLock() lock];
   @try {
     if ([op isEqualToString:@"probe"]) {
