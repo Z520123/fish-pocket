@@ -169,3 +169,45 @@ struct PhoneControlView: View {
         }
     }
 }
+
+/// 侧边栏「操控手机」那一行要一个状态：现在读的是 App 自己的本机操控，不再是 iCTRL。
+/// 页面本身不再需要它，留着是因为 `ExploreTabView` 和 `DrawerView` 都拿它决定那一行写什么。
+@MainActor @Observable
+final class PhoneControlService {
+    enum State: Equatable {
+        case checking, notInstalled, stopped, running
+
+        var title: String {
+            switch self {
+            case .checking: String(localized: "检查中…")
+            case .notInstalled: String(localized: "还没配")
+            case .stopped: String(localized: "待挂镜像")
+            case .running: String(localized: "可以操控")
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .running: .green
+            case .stopped: .orange
+            case .notInstalled, .checking: .gray
+            }
+        }
+    }
+
+    private(set) var state: State = .checking
+
+    func refresh() async {
+        let s = PhoneLink.shared.stateJSON()
+        let paired = s["paired"] as? Bool ?? false
+        let stage = s["stage"] as? String ?? "idle"
+        let image = s["ddi"] as? Bool ?? false
+        if !paired {
+            state = .notInstalled
+        } else if stage == "ready" || image {
+            state = .running
+        } else {
+            state = .stopped
+        }
+    }
+}
