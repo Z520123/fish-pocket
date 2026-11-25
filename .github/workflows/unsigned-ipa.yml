@@ -151,17 +151,42 @@ jobs:
             EXPANDED_CODE_SIGN_IDENTITY="" PROVISIONING_PROFILE_SPECIFIER="" \
             build
 
+      # 出一个能直接侧载的包：符号链接展开、Watch 摘掉、rpath 自检。
+      # 这些以前是出包后手动改的，每轮都可能漏，现在交给流水线。
       - name: Package IPA
         run: |
           set -euo pipefail
           APP=$(find app/build/DerivedData/Build/Products -maxdepth 4 -name 'DshIOS.app' -type d | head -1)
           echo "app: $APP"
           [ -d "$APP" ] || { echo "no DshIOS.app was produced"; find app/build/DerivedData/Build/Products -maxdepth 3 -type d | head -20; exit 1; }
+
+          rm -rf dist
           mkdir -p dist/Payload
-          cp -R "$APP" dist/Payload/
+          # -L 把 node_modules 的平台包和 .bin 里的命令这些链接换成真实文件：
+          # SideStore 装进去以后是不跟着符号链接的，上回就是它让引擎起不来。
+          # --exclude Watch 摘掉 Watch 伴侣 App，不然报 InvalidCompanionAppBundleIdentifier。
+          rsync -aL --exclude 'Watch' "$APP" dist/Payload/
+          rm -rf dist/Payload/DshIOS.app/Watch
+
+          # 自检：主二进制得有这两条 rpath，否则手机操控缺库。
+          BIN=dist/Payload/DshIOS.app/DshIOS
+          for rp in /System/Developer/usr/lib /System/Developer/Library/PrivateFrameworks; do
+            if ! grep -q "$rp" "$BIN"; then echo "missing rpath: $rp"; exit 1; fi
+            echo "rpath ok: $rp"
+          done
+          # 自检：Payload 里不该再有链接。
+          LINKS=$(find dist/Payload -type l | wc -l | tr -d ' ')
+          if [ "$LINKS" != "0" ]; then
+            echo "symlinks left in Payload ($LINKS):"
+            find dist/Payload -type l | head -20
+            exit 1
+          fi
+          echo "symlinks: 0"
+
           cd dist
-          zip -qry fish-pocket-unsigned.ipa Payload
+          zip -qry -X fish-pocket-unsigned.ipa Payload
           ls -lh fish-pocket-unsigned.ipa
+          unzip -l fish-pocket-unsigned.ipa | tail -3
 
       - uses: actions/upload-artifact@v4
         with:
