@@ -1,30 +1,62 @@
-// phone: open the UI-automation session and, later, put touches on the screen.
+// phone: open the UI-automation session on this phone — no Mac, no second app.
 //
-// The work is Poki's (native/poki-phone, AGPL-3.0, vendored for this fork only):
-// PKInProcess loads the developer frameworks a mounted DDI provides and drives
-// the phone through them. This file is the capability edge — the part the agent
-// is allowed to reach — so it starts with the one operation that answers a
-// question instead of changing anything: can a session be opened at all?
+// Two halves meet here. The Rust launcher (native/poki-launcher) pairs the phone with
+// itself and mounts the developer disk image; in the in-process mode this app uses it
+// then stops short of starting a runner and leaves the image for the app to load.
+// PKInProcess (native/poki-phone, Poki's execution layer) is the half that puts touches
+// on the screen from the app's own process.
 //
-// `probe` is deliberately first. Every later operation (tap, type, read,
-// screenshot) is worth nothing if the frameworks are missing or the session
-// cannot be opened, and those two failures look identical to "the tap did
-// nothing" from the agent's side. Asking once, and reporting what came back,
-// keeps that apart.
+// `probe` is deliberately first and answers three questions at once, because from the
+// agent's side their failures all look alike — "the tap did nothing":
+//   launcher: is the Rust archive linked, does it read the config this app writes?
+//   ddi:      is a developer disk image mounted (/System/Developer)?
+//   session:  can an automation session be opened at all?
 #import "dsh_ios_native.h"
 #import "../poki-phone/InProcess.h"
+#include "../poki-launcher/include/poki_launcher.h"
 
-/// Answer with what the execution layer says about itself.
+/// A launcher built from the config this app will use, asked for its status and freed
+/// again — never started, so nothing touches the network. It proves the archive is
+/// linked and that the Rust config reader agrees with the JSON written here.
 ///
-/// `developerFrameworksAvailable` only reports whether the four developer
-/// frameworks could be loaded, which is a DDI question: with no image mounted
-/// the paths do not exist. `prepare` then opens a session and, on this phone,
-/// waits for iOS's own allow-automation prompt, so this call can take seconds.
+/// Every field is spelled out: `pairing_file` has no default in the reader, and a
+/// launcher that cannot be deserialized comes back NULL, which would otherwise surface
+/// much later as an unrelated failure.
+static NSDictionary *phone_launcher_self_test(void) {
+  NSString *config = @"{"
+    @"\"device_address\":\"10.7.0.1\","
+    @"\"pairing_file\":\"/dev/null\","
+    @"\"host_name\":\"Fish Pocket\","
+    @"\"ddi_dir\":\"\","
+    @"\"wda_host\":\"127.0.0.1\","
+    @"\"wda_port\":8100,"
+    @"\"in_process\":true"
+    @"}";
+  PokiLauncher *launcher = poki_launcher_new(config.UTF8String, NULL, NULL);
+  if (launcher == NULL) {
+    return @{@"linked": @YES, @"config": @NO};
+  }
+  char *raw = poki_launcher_status(launcher);
+  NSString *status = raw ? [NSString stringWithUTF8String:raw] : nil;
+  if (raw != NULL) {
+    poki_string_free(raw);
+  }
+  poki_launcher_free(launcher);
+  return @{@"linked": @YES, @"config": @YES, @"status": status ?: @""};
+}
+
 static void phone_probe(DshNativeReply reply) {
+  NSDictionary *launcher = phone_launcher_self_test();
+  if (![launcher[@"config"] boolValue]) {
+    reply(@{@"launcher": launcher, @"ddi": @NO, @"session": @NO},
+          @"The Rust launcher is linked but would not build from the app's config.");
+    return;
+  }
   PKInProcess *core = [PKInProcess shared];
   BOOL frameworks = [core developerFrameworksAvailable];
   if (!frameworks) {
     reply(@{
+      @"launcher": launcher,
       @"ddi": @NO,
       @"session": @NO,
       @"reason": @"The developer frameworks are not on this phone (/System/Developer is missing), "
@@ -32,8 +64,10 @@ static void phone_probe(DshNativeReply reply) {
     }, nil);
     return;
   }
+  // Opens a session; on this phone iOS asks for the automation allowance first, so this
+  // call can take seconds.
   NSDictionary *prepared = [core prepare];
-  reply(@{@"ddi": @YES, @"session": prepared ?: @{}}, nil);
+  reply(@{@"launcher": launcher, @"ddi": @YES, @"session": prepared ?: @{}}, nil);
 }
 
 void dsh_native_phone(NSString *op, NSDictionary *args, DshNativeReply reply) {
