@@ -1953,17 +1953,174 @@ const phone = defineTool({
   output: {
     schema: { type: 'json' },
     render: (_args, value) => {
-      if (!value.ddi) return text(value.reason ?? 'the developer frameworks are not available');
+      const launcher = value.launcher ?? {};
+      const where = launcher.stage ? `local control: ${launcher.stage}` : 'local control: not set up';
+      if (!value.ddi) {
+        return text(`${where}\n${value.reason ?? 'the developer frameworks are not available'}`);
+      }
       const session = value.session ?? {};
       if (session.ok) {
         return text(`automation session ready in ${session.seconds ?? '?'}s`
           + (session.seconds && session.warm_seconds ? `, tree readable after ${session.warm_seconds}s` : ''));
       }
-      return text(`session refused: ${session.code ?? 'unknown'}`
+      return text(`${where}\nsession refused: ${session.code ?? 'unknown'}`
         + (session.detail ? ` — ${session.detail}` : ''));
     },
   },
   execute: () => invoke('phone', 'probe'),
+});
+
+/** What the phone confirmed, which is not always what it was asked. */
+function phoneOutcome(value) {
+  const delivery = { 0: 'not sent', 1: 'sent', 2: 'sent, no answer' }[value?.delivery] ?? 'unknown';
+  const extra = value?.code ? ` (${value.code})` : '';
+  const detail = value?.detail ? `: ${value.detail}` : '';
+  return `${delivery}${extra}${detail}`;
+}
+
+const phoneState = defineTool({
+  name: 'phone_state',
+  description:
+    'What local phone control is doing right now: whether this phone is paired with the app, '
+    + 'whether a developer disk image is mounted, and where the launcher got to. Call it when a '
+    + 'phone call fails and the reason is not obvious.',
+  parameters: {},
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => {
+      const lines = [
+        `stage: ${value.stage ?? 'unknown'}`,
+        `paired: ${value.paired ? 'yes' : 'no'}`,
+        `developer image: ${value.ddi ? 'mounted' : 'not mounted'}`,
+      ];
+      if (value.detail) lines.push(`detail: ${value.detail}`);
+      if (value.pin) lines.push(`pairing pin: ${value.pin}`);
+      if (value.launcher) lines.push(`launcher: ${value.launcher}`);
+      return text(lines.join('\n'));
+    },
+  },
+  execute: () => invoke('phone', 'state'),
+});
+
+const phoneScreen = defineTool({
+  name: 'phone_screen',
+  description:
+    'Read the screen of this iPhone: the app in front and its elements as an XML tree, each with '
+    + 'the frame a tap needs. Read it before tapping anything — coordinates come from here, never '
+    + 'from a guess. Only apps that allow accessibility expose their elements.',
+  parameters: {},
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => {
+      const front = value.front ?? {};
+      const head = `front: ${front.name ?? 'unknown'} (${front.bundleId ?? '?'})`;
+      const source = value.source ?? '';
+      return text(`${head}\n\n${cut(source, 24000, 'source')}`);
+    },
+  },
+  execute: () => invoke('phone', 'screen'),
+});
+
+const phoneTap = defineTool({
+  name: 'phone_tap',
+  description:
+    'Tap one point on this iPhone. The coordinates are screen points from phone_screen, not '
+    + 'pixels. A tap that lands on nothing is only knowable by reading the screen again.',
+  parameters: {
+    x: { type: 'number', description: 'horizontal position in points, from the left edge', required: true },
+    y: { type: 'number', description: 'vertical position in points, from the top edge', required: true },
+  },
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(`tap at ${value.x}, ${value.y}: ${phoneOutcome(value)}`),
+  },
+  execute: ({ x, y }) => invoke('phone', 'tap', { x, y }),
+});
+
+const phoneSwipe = defineTool({
+  name: 'phone_swipe',
+  description:
+    'Drag one finger across the screen: scrolling a list, dismissing a sheet, pulling a page down. '
+    + 'Points again, from the left and the top, screen points.',
+  parameters: {
+    x1: { type: 'number', description: 'start, horizontal', required: true },
+    y1: { type: 'number', description: 'start, vertical', required: true },
+    x2: { type: 'number', description: 'end, horizontal', required: true },
+    y2: { type: 'number', description: 'end, vertical', required: true },
+    seconds: { type: 'number', description: 'how long the drag takes; 0.4 when left out' },
+  },
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(`swipe: ${phoneOutcome(value)}`),
+  },
+  execute: ({ x1, y1, x2, y2, seconds }) => invoke('phone', 'swipe', { x1, y1, x2, y2, seconds }),
+});
+
+const phoneType = defineTool({
+  name: 'phone_type',
+  description:
+    'Type text into whatever field has the keyboard focus. It does not focus a field or clear one: '
+    + 'tap the field first, and clear it yourself when the old text would stay.',
+  parameters: {
+    text: { type: 'string', description: 'the text to type', required: true },
+  },
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(`type: ${phoneOutcome(value)}`),
+  },
+  execute: ({ text: value }) => invoke('phone', 'type', { text: value }),
+});
+
+const phoneScreenshot = defineTool({
+  name: 'phone_screenshot',
+  description:
+    'Capture the screen of this iPhone to a file and answer its path. Use it when the element tree '
+    + 'is not enough: a picture, a chart, a page drawn without accessibility. Read the file back '
+    + 'with read_image.',
+  parameters: {},
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(value.path ? `saved to ${value.path} (${value.bytes} bytes)` : 'no picture'),
+  },
+  execute: () => invoke('phone', 'screenshot'),
+});
+
+const phonePress = defineTool({
+  name: 'phone_press',
+  description: 'Press one hardware button: home, lock, volumeUp or volumeDown.',
+  parameters: {
+    name: {
+      type: 'string',
+      enum: ['home', 'lock', 'volumeUp', 'volumeDown'],
+      description: 'which button',
+      required: true,
+    },
+  },
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(`pressed ${value.pressed}`),
+  },
+  execute: ({ name }) => invoke('phone', 'press', { name }),
+});
+
+const phoneApp = defineTool({
+  name: 'phone_app',
+  description:
+    'Launch, activate or terminate an app on this iPhone by its bundle id (for example '
+    + 'com.apple.Preferences). Launching is how to get to an app without hunting for its icon.',
+  parameters: {
+    bundle: { type: 'string', description: 'the app bundle id', required: true },
+    action: {
+      type: 'string',
+      enum: ['launch', 'activate', 'terminate'],
+      description: 'defaults to launch',
+    },
+  },
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(`${value.action ?? 'launch'} ${value.bundle}: done`),
+  },
+  execute: ({ bundle, action }) => invoke('phone', 'app', { bundle, action }),
 });
 
 // A tool is a definition, or a function of the registering context for the
@@ -1991,4 +2148,12 @@ export const TOOLS = {
   weather: weather,
   browser: browser,
   phone: phone,
+  phoneState: phoneState,
+  phoneScreen: phoneScreen,
+  phoneTap: phoneTap,
+  phoneSwipe: phoneSwipe,
+  phoneType: phoneType,
+  phoneScreenshot: phoneScreenshot,
+  phonePress: phonePress,
+  phoneApp: phoneApp,
 };
