@@ -90,28 +90,27 @@ struct PetAnimation: Equatable {
     /// 这一格在画布上的位置与大小，美术像素。
     let box: CGRect
 
-    static let idle = PetAnimation(sheet: "idle", cols: 21, frames: 42, rows: 2,
+    static let idle = PetAnimation(sheet: "pet-deepy-idle", cols: 21, frames: 42, rows: 2,
                                    box: CGRect(x: 12, y: 26, width: 36, height: 24))
-    static let thinking = PetAnimation(sheet: "thinking", cols: 16, frames: 48, rows: 3,
+    static let thinking = PetAnimation(sheet: "pet-deepy-thinking", cols: 16, frames: 48, rows: 3,
                                        box: CGRect(x: 0, y: 6, width: 47, height: 44))
-    static let working = PetAnimation(sheet: "typing", cols: 12, frames: 48, rows: 4,
+    static let working = PetAnimation(sheet: "pet-deepy-typing", cols: 12, frames: 48, rows: 4,
                                       box: CGRect(x: 0, y: 17, width: 52, height: 33))
-    static let happy = PetAnimation(sheet: "happy", cols: 13, frames: 52, rows: 4,
+    static let happy = PetAnimation(sheet: "pet-deepy-happy", cols: 13, frames: 52, rows: 4,
                                     box: CGRect(x: 0, y: 5, width: 52, height: 45))
-    static let sleeping = PetAnimation(sheet: "sleeping", cols: 16, frames: 64, rows: 4,
+    static let sleeping = PetAnimation(sheet: "pet-deepy-sleeping", cols: 16, frames: 64, rows: 4,
                                        box: CGRect(x: 2, y: 2, width: 44, height: 48))
-    static let reactLeft = PetAnimation(sheet: "react-left", cols: 14, frames: 40, rows: 3,
+    static let reactLeft = PetAnimation(sheet: "pet-deepy-react-left", cols: 14, frames: 40, rows: 3,
                                         box: CGRect(x: 1, y: 16, width: 50, height: 34))
-    static let reactRight = PetAnimation(sheet: "react-right", cols: 14, frames: 40, rows: 3,
+    static let reactRight = PetAnimation(sheet: "pet-deepy-react-right", cols: 14, frames: 40, rows: 3,
                                          box: CGRect(x: 8, y: 16, width: 44, height: 34))
 
-    /// 图集 PNG，从资源目录 `Pets/deepy-whale/` 取；解码一次就留着。
+    /// 图集 PNG，bundle 根目录下带 `pet-deepy-` 前缀的那几张；解码一次就留着。
     private static let images = NSCache<NSString, UIImage>()
 
     func image() -> UIImage? {
         if let hit = Self.images.object(forKey: sheet as NSString) { return hit }
-        guard let url = Bundle.main.url(forResource: sheet, withExtension: "png",
-                                        subdirectory: "Pets/deepy-whale"),
+        guard let url = Bundle.main.url(forResource: sheet, withExtension: "png"),
               let image = UIImage(contentsOfFile: url.path) else { return nil }
         Self.images.setObject(image, forKey: sheet as NSString)
         return image
