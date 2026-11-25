@@ -86,9 +86,6 @@ targets:
       - path: ../native/ffmpeg/binding.c
     dependencies:
       - package: PokiCore
-      # The phone's Rust library (pairing, developer-image mounting, the runner),
-      # built by the CI step before xcodegen runs.
-      - library: ../vendor/poki-launcher/libpoki_launcher.a
       # First: the app's own libc calls (libgit2) bind to it by link order, as Node's do by its load command.
       - target: DshRoot
       - framework: ../vendor/nodejs-mobile/rooted/NodeMobile.xcframework
@@ -286,6 +283,11 @@ targets:
         GCC_PREPROCESSOR_DEFINITIONS: ["$(inherited)", "DSH_GIT_LINKED=1", "DSH_IMAGE_LINKED=1", "DSH_IOS_NATIVE_LINKED=1"]
         # __FILE__ in native/git must not carry the build machine's home directory into the binary.
         OTHER_CFLAGS: ["$(inherited)", "-fmacro-prefix-map=$(SRCROOT:dir:standardizepath)=."]
+        # The phone's Rust library: pairing, developer-image mounting, the runner
+        # (native/poki-launcher, built by the CI step before xcodegen runs). It is a bare
+        # archive, not a target of its own, so it is linked by search path: an entry in
+        # the dependencies list would have to be a target, framework or package.
+        OTHER_LDFLAGS: ["$(inherited)", "-L$(SRCROOT)/../vendor/poki-launcher", "-lpoki_launcher", "-lc++", "-lz", "-framework", "Security", "-framework", "CoreFoundation", "-framework", "IOKit"]
   # The engine's filesystem view (native/root): libc's path functions, and libSystem re-exported.
   DshRoot:
     type: framework
