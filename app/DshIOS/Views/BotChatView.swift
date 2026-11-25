@@ -112,6 +112,8 @@ private struct BotHeader: View {
         .padding(.horizontal, 16)
         .padding(.top, 2)
         .padding(.bottom, 8)
+        // 和页底同色，看不出边：只挡住滚上来的聊天记录（ScrollView 关了自己的裁切）。
+        .background(Palette.control)
     }
 }
 
