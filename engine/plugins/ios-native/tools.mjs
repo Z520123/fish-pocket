@@ -1943,6 +1943,29 @@ const browser = (ctx, catalog = describe('browser') ?? NO_CATALOG) => defineTool
   },
 });
 
+const phone = defineTool({
+  name: 'phone_probe',
+  description:
+    'Check whether this iPhone can open a UI-automation session, which is what driving other apps '
+    + 'needs. It only asks, it changes nothing. Requires a mounted developer disk image (DDI) and '
+    + 'the user\'s switch under Device capabilities; a refusal says which of the two is missing.',
+  parameters: {},
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => {
+      if (!value.ddi) return text(value.reason ?? 'the developer frameworks are not available');
+      const session = value.session ?? {};
+      if (session.ok) {
+        return text(`automation session ready in ${session.seconds ?? '?'}s`
+          + (session.seconds && session.warm_seconds ? `, tree readable after ${session.warm_seconds}s` : ''));
+      }
+      return text(`session refused: ${session.code ?? 'unknown'}`
+        + (session.detail ? ` — ${session.detail}` : ''));
+    },
+  },
+  execute: () => invoke('phone', 'probe'),
+});
+
 // A tool is a definition, or a function of the registering context for the
 // few that need the engine itself.
 export const TOOLS = {
@@ -1967,4 +1990,5 @@ export const TOOLS = {
   files: files,
   weather: weather,
   browser: browser,
+  phone: phone,
 };
