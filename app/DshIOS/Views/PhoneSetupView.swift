@@ -58,19 +58,32 @@ struct PhoneSetupView: View {
                 Button {
                     busy = true
                     message = nil
-                    PhoneLink.shared.prepareDevice { problem in
+                    PhoneLink.shared.downloadImageOnly { problem in
                         busy = false
                         message = problem
                         refresh()
                     }
                 } label: {
-                    Label(busy ? "正在准备…" : (imagePresent ? "连接（镜像已在）" : "下载镜像并连接"), systemImage: "arrow.down.circle")
+                    Label(imagePresent ? "镜像已下载" : "下载开发者镜像", systemImage: "arrow.down.circle")
                 }
-                .disabled(busy || !paired)
+                .disabled(busy || !paired || imagePresent)
+
+                Button {
+                    busy = true
+                    message = nil
+                    PhoneLink.shared.mountImage { problem in
+                        busy = false
+                        message = problem
+                        refresh()
+                    }
+                } label: {
+                    Label(busy ? "正在挂载…" : "挂载镜像", systemImage: "externaldrive.connected.to.line.below")
+                }
+                .disabled(busy || !imagePresent)
             } header: {
                 Text("第一步：配对和镜像")
             } footer: {
-                Text("配对：点「开始配对」后打开「设置」，里面会出现一个 Fish Pocket 的配对条目，点进去输入这一页显示的六位数字。\n\n镜像：iOS 重启后要重新挂一次。挂载要连本机自己的 10.7.0.1，所以这一步需要把 10.7.0.1 绕回本机的隧道（代理 App 加一条规则，或者 LocalDevVPN）。挂上以后，点按、输入、读屏都不再走它，平时不需要开着。")
+                Text("配对：点「开始配对」后打开「设置」，里面会出现一个 Fish Pocket 的配对条目，点进去输入这一页显示的六位数字。\n\n下载和挂载是两件事，因为它们的网络要求正好相反。下载走 GitHub，要能连上 GitHub（代理或全局 VPN）；挂载连的是本机自己的 10.7.0.1，要的是把那个地址绕回本机的隧道。两条同时开着常常谁都不通，所以分开点：先关隧道下载，再开隧道挂载。\n\niOS 重启后镜像要重新挂一次，文件还在，只要再点「挂载镜像」。挂上以后，点按、输入、读屏都不再走那条隧道。")
             }
             .groupedRow()
 
