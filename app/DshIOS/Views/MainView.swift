@@ -37,7 +37,7 @@ struct MainView: View {
     @State private var widthOnLeaving: CGFloat?
     @State private var searchRequest = 0
     @State private var drawerOpen = false
-    @State private var tab = HomeTab.sessions
+    @State private var tab = HomeTab.bot
     /// The 会话 tab's stack: the conversation on screen (`selection`) on top of the list.
     @State private var sessionsPath: [DrawerView.Route]
     /// The 探索 tab's stack: the plugin store is pushed on it when something asks for it.
@@ -554,6 +554,8 @@ struct MainView: View {
 
     var body: some View {
         shell
+        // 打开 App 直接进大肥鱼的聊天（设计稿的主界面），团队还没拉回来时等一会儿。
+        .task { await openMainBotOnLaunch() }
         .sheet(item: $sheet) { page(of: $0).sheetNotices() }
         .sheet(item: $onboarding, onDismiss: onboardingDismissed) { step in
             switch step {
@@ -741,6 +743,19 @@ struct MainView: View {
         )
     }
 
+    /// 打开 App 直接落在主 Bot 的聊天上：设计稿的主界面就是它，不是列表。
+    /// 只做一次；用户自己返回列表以后不再把人推回去。
+    private func openMainBotOnLaunch() async {
+        guard usesTabs, layoutWidth == .compact, tab == .bot else { return }
+        for _ in 0..<25 {
+            if let id = app.botTeam.mainBot?.id {
+                if botPath.isEmpty { botPath = [.bot(id)] }
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(240))
+        }
+    }
+
     private func toggleSidebar() {
         // On the tab bar the 会话 tab's list, or the Bot tab's, where it is beside the chat.
         if usesTabs {
@@ -894,7 +909,7 @@ struct MainView: View {
             }
             .badge(badges.waiting)
             Tab(value: HomeTab.bot) {
-                if sessionsSideBySide { botSplit } else { botStack(openDrawer: nil) }
+                if sessionsSideBySide { botSplit } else { botStack(openDrawer: { setDrawer(true) }) }
             } label: {
                 tabLabel(Text(verbatim: "Bot"), "fp.bot", custom: true)
             }
@@ -906,6 +921,7 @@ struct MainView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .toolbar(.hidden, for: .tabBar)
         .background(TabBarAppearanceFollower())
         // iPhone Duo open keeps a column at its trailing edge for the bar buttons and the tab bar. The
         // system settles what goes there when the tab view is made: made folded, then opened, the

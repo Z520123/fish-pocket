@@ -448,10 +448,8 @@ struct ConversationView: View {
                     // A Bot runs no subagents of DSH's, its scheduled tasks are on its own page, and
                     // its background jobs float over the chat's foot.
                     if bot == nil { SessionHeaderActions(sessionId: sessionId) { headerSheet = $0 } }
-                    if let menu = bot?.menu {
-                        menu(model, hasTools ? BotChatTools(toggleWorkbench: toggleWorkbench, openBrowser: openBrowser) : nil)
-                    }
-                    // A Bot's chat keeps its bar to the title and its menu: the workbench is in the menu.
+                    // A Bot's chat keeps its bar to just the title: the design has no menu button.
+                    // The workbench is on its own button for everything else.
                     if bot == nil {
                         Button(action: toggleWorkbench) { Image(systemName: "apple.terminal") }
                             .accessibilityLabel("工作台")

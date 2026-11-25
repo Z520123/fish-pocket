@@ -1,111 +1,185 @@
 import SwiftUI
 
-/// 桌宠：dsh-Go 的 Deepy 小鲸鱼，站在聊天页右下角。
+/// 桌宠：站在聊天页底部，可以左右拖着走，点一下有反应。
 ///
-/// 图集从 dsh-Go 仓库（`app/assets/pets/deepy-whale`）搬来，一张平铺 PNG 一段动画：
-/// 每格 `box` 大小、按 `cols` 排成网格。播放就是把整张图按格宽放大、平移到当前格，
-/// 外面套一个裁到 `box` 的窗口。数据先写死这一只，以后接宠物包时换成读 pack.json。
+/// 内置的是 dsh-Go 的 Deepy 小鲸鱼（图集在 bundle 根目录，数据写死）；
+/// 装了宠物包以后改读 `pack.json`，图和帧表都用包里的。
 struct PetStage: View {
-    /// 美术像素到屏幕点的倍率：dsh-Go 的宠物按 contentBox 定档，这里取标准档相近的大小。
-    private static let scale: CGFloat = 2.6
+    /// 美术像素到点的倍率，三档大小。
+    @AppStorage("dsh.pet.size") private var sizeRaw = 1
+    /// 相对右边缘向左挪了多少点，拖动后记住。
+    @AppStorage("dsh.pet.offsetX") private var storedX = 0.0
 
-    @State private var animation = PetAnimation.idle
+    @ObservedObject private var store = PetStore.shared
+
+    @State private var builtin = PetAnimation.idle
+    @State private var reaction: PetAnim?
     @State private var frame = 0
     @State private var reacting = false
     @State private var bubble: String?
+    @State private var dragX: CGFloat = 0
 
     private let clock = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
-    private let bubbleTimer = Timer.publish(every: 2.2, on: .main, in: .common).autoconnect()
+    private let bubbleTimer = Timer.publish(every: 2.4, on: .main, in: .common).autoconnect()
 
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let bubble {
-                Text(bubble)
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, Self.scale * animation.box.height + 6)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    .allowsHitTesting(false)
-            }
-            sprite
+    private var pointScale: CGFloat {
+        switch Int(sizeRaw) {
+        case 0: 1.9
+        case 2: 3.4
+        default: 2.6
         }
     }
 
-    private var sprite: some View {
-        Group {
-            if let image = animation.image() {
-                let boxW = animation.box.width * Self.scale
-                let boxH = animation.box.height * Self.scale
-                let columns = animation.cols
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.none)
-                    .frame(width: CGFloat(columns) * boxW, height: CGFloat(animation.rows) * boxH)
-                    .offset(x: -CGFloat(frame % columns) * boxW, y: -CGFloat(frame / columns) * boxH)
-                    .frame(width: boxW, height: boxH, alignment: .topLeading)
-                    .clipped()
-                    .contentShape(Rectangle())
-                    .onTapGesture { tap() }
-                    .accessibilityLabel(Text("桌宠"))
-                    .accessibilityHint(Text("点一下有反应"))
+    var body: some View {
+        GeometryReader { geo in
+            let spec = currentSpec
+            let k = pointScale
+            let w = spec.anim.box.width * k
+            let h = spec.anim.box.height * k
+            let margin: CGFloat = 10
+            let leftEdge = w / 2 + 4
+            let rightEdge = max(leftEdge, geo.size.width - w / 2 - margin)
+            let x = min(max(rightEdge + storedX + dragX, leftEdge), rightEdge)
+
+            VStack(spacing: 2) {
+                if let bubble {
+                    Text(bubble)
+                        .font(.caption2)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(.regularMaterial, in: Capsule())
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        .allowsHitTesting(false)
+                }
+                sprite(spec, k: k)
+                Text(store.usingBuiltin ? "小鲸鱼" : (store.current?.name ?? ""))
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(Palette.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 78)
+                    .allowsHitTesting(false)
             }
+            .fixedSize()
+            .contentShape(Rectangle())
+            // 拖：跟着手指走，松手把新位置记住（相对右边缘，负数是往左）。
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in dragX = value.translation.width }
+                    .onEnded { _ in
+                        storedX = min(max(storedX + dragX, -2000), 0)
+                        dragX = 0
+                    }
+            )
+            .onTapGesture { tap() }
+            .position(x: x, y: geo.size.height - h / 2 - 8)
         }
         .onReceive(clock) { _ in
             guard !reacting else { return }
-            frame = (frame + 1) % animation.frames
+            frame = (frame + 1) % max(currentSpec.anim.indexes.count, 1)
         }
         .onReceive(bubbleTimer) { _ in
             if bubble != nil { bubble = nil }
+        }
+        .accessibilityLabel(Text("桌宠"))
+        .accessibilityHint(Text("点一下有反应，可以左右拖"))
+    }
+
+    /// 现在该画哪一只：反应动画 > 宠物包 > 内置待机。
+    private var currentSpec: PetSpec {
+        if !store.usingBuiltin, let pack = store.current {
+            if let reaction, let image = store.image(for: reaction) {
+                return PetSpec(image: image, anim: reaction)
+            }
+            let key = pack.animations["idle"] != nil ? "idle" : (pack.animations.keys.sorted().first ?? "idle")
+            if let anim = pack.animations[key], let image = store.image(for: anim) {
+                return PetSpec(image: image, anim: anim)
+            }
+        }
+        return PetSpec(image: builtin.image(), anim: builtin.anim)
+    }
+
+    /// 一张图集按格切：整图放大后平移到当前格，外面裁一个 `box` 大小的窗口。
+    @ViewBuilder
+    private func sprite(_ spec: PetSpec, k: CGFloat) -> some View {
+        let anim = spec.anim
+        let cols = anim.cols
+        let rows = max(1, Int(ceil(Double((anim.indexes.max() ?? 0) + 1) / Double(cols))))
+        let cellW = anim.frameW * k
+        let cellH = anim.frameH * k
+        let slot = anim.indexes[min(frame, anim.indexes.count - 1)]
+        if let image = spec.image {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.none)
+                .frame(width: cellW * CGFloat(cols), height: cellH * CGFloat(rows))
+                .offset(x: -CGFloat(slot % cols) * cellW - anim.box.minX * k,
+                        y: -CGFloat(slot / cols) * cellH - anim.box.minY * k)
+                .frame(width: anim.box.width * k, height: anim.box.height * k, alignment: .topLeading)
+                .clipped()
+                .contentShape(Rectangle())
+        } else {
+            Color.clear.frame(width: anim.box.width * k, height: anim.box.height * k)
         }
     }
 
     /// 点一下：随机一个反应，播完回到待机。
     private func tap() {
         Haptics.tap()
-        play(Bool.random() ? .reactLeft : .reactRight, for: 1.4)
-        bubble = ["在的", "戳我干嘛", "要干活吗", "好耶"].randomElement()
-    }
-
-    private func play(_ next: PetAnimation, for seconds: TimeInterval) {
-        reacting = true
-        animation = next
         frame = 0
+        reacting = true
+        if !store.usingBuiltin, let pack = store.current,
+           let left = pack.animations["react-left"] ?? pack.animations["idle"],
+           let right = pack.animations["react-right"] ?? pack.animations["idle"] {
+            reaction = Bool.random() ? left : right
+        } else {
+            builtin = Bool.random() ? .reactLeft : .reactRight
+        }
+        bubble = ["在的", "戳我干嘛", "要干活吗", "好耶"].randomElement()
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(seconds))
-            animation = .idle
+            try? await Task.sleep(for: .seconds(1.4))
+            reaction = nil
+            builtin = .idle
             frame = 0
             reacting = false
         }
     }
 }
 
-/// 一段宠物动画：一张图集、每格大小、几列、多少帧。
-struct PetAnimation: Equatable {
+/// 一次绘制需要的全部东西：解码好的图 + 取帧规则。
+private struct PetSpec {
+    let image: UIImage?
+    let anim: PetAnim
+}
+
+/// 内置那只的数据：图集在 bundle 根目录，帧表照 dsh-Go 的 pack.json 写死。
+struct PetAnimation {
     let sheet: String
-    let cols: Int
-    let frames: Int
-    let rows: Int
-    /// 这一格在画布上的位置与大小，美术像素。
-    let box: CGRect
+    let anim: PetAnim
 
-    static let idle = PetAnimation(sheet: "pet-deepy-idle", cols: 21, frames: 42, rows: 2,
-                                   box: CGRect(x: 12, y: 26, width: 36, height: 24))
-    static let thinking = PetAnimation(sheet: "pet-deepy-thinking", cols: 16, frames: 48, rows: 3,
-                                       box: CGRect(x: 0, y: 6, width: 47, height: 44))
-    static let working = PetAnimation(sheet: "pet-deepy-typing", cols: 12, frames: 48, rows: 4,
-                                      box: CGRect(x: 0, y: 17, width: 52, height: 33))
-    static let happy = PetAnimation(sheet: "pet-deepy-happy", cols: 13, frames: 52, rows: 4,
-                                    box: CGRect(x: 0, y: 5, width: 52, height: 45))
-    static let sleeping = PetAnimation(sheet: "pet-deepy-sleeping", cols: 16, frames: 64, rows: 4,
-                                       box: CGRect(x: 2, y: 2, width: 44, height: 48))
-    static let reactLeft = PetAnimation(sheet: "pet-deepy-react-left", cols: 14, frames: 40, rows: 3,
-                                        box: CGRect(x: 1, y: 16, width: 50, height: 34))
-    static let reactRight = PetAnimation(sheet: "pet-deepy-react-right", cols: 14, frames: 40, rows: 3,
-                                         box: CGRect(x: 8, y: 16, width: 44, height: 34))
+    static let idle = builtin("pet-deepy-idle", cols: 21, count: 42, box: CGRect(x: 12, y: 26, width: 36, height: 24))
+    static let thinking = builtin("pet-deepy-thinking", cols: 16, count: 48, box: CGRect(x: 0, y: 6, width: 47, height: 44))
+    static let working = builtin("pet-deepy-typing", cols: 12, count: 48, box: CGRect(x: 0, y: 17, width: 52, height: 33))
+    static let happy = builtin("pet-deepy-happy", cols: 13, count: 52, box: CGRect(x: 0, y: 5, width: 52, height: 45))
+    static let sleeping = builtin("pet-deepy-sleeping", cols: 16, count: 64, box: CGRect(x: 2, y: 2, width: 44, height: 48))
+    static let reactLeft = builtin("pet-deepy-react-left", cols: 14, count: 40, box: CGRect(x: 1, y: 16, width: 50, height: 34))
+    static let reactRight = builtin("pet-deepy-react-right", cols: 14, count: 40, box: CGRect(x: 8, y: 16, width: 44, height: 34))
 
-    /// 图集 PNG，bundle 根目录下带 `pet-deepy-` 前缀的那几张；解码一次就留着。
+    private static func builtin(_ sheet: String, cols: Int, count: Int, box: CGRect) -> PetAnimation {
+        PetAnimation(
+            sheet: sheet,
+            anim: PetAnim(
+                sheet: Bundle.main.url(forResource: sheet, withExtension: "png") ?? URL(fileURLWithPath: "/"),
+                frameW: box.width * 5,
+                frameH: box.height * 5,
+                cols: cols,
+                box: box,
+                indexes: Array(0..<count),
+                fps: 10
+            )
+        )
+    }
+
+    /// 图集 PNG，解码一次就留着。
     private static let images = NSCache<NSString, UIImage>()
 
     func image() -> UIImage? {

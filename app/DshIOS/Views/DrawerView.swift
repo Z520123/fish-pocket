@@ -111,25 +111,31 @@ struct DrawerView: View {
     private var sidebar: some View {
         NavigationStack {
             List {
-                BotDrawerEntry()
-                    .padding(.top, 4)
+                // 设计稿：顶上一个大按钮，然后是我的 Bot，再往下才是会话。
+                newConversationFullRow
                     .plainRow()
-                pluginsRow
-                miniAppsRow
-                phoneControlRow
-                connectorsRow
-                webRow
-                shortcutsRow
-                remoteControlRow
+                BotDrawerEntry()
+                    .plainRow()
                 sessionsHeader
                 if app.remote.expired { remoteExpiredRow }
                 if grouping == .time { timeList } else { groupList }
+                // 设计稿把抽屉留给会话；这些工具入口跟在列表后面，往下滚才看到。
+                Section {
+                    miniAppsRow
+                    phoneControlRow
+                    connectorsRow
+                    pluginsRow
+                    webRow
+                    shortcutsRow
+                    remoteControlRow
+                } header: {
+                    Text("工具").font(.footnote).foregroundStyle(Palette.secondary)
+                }
             }
             .sessionList()
             // Both bars float: the list scrolls under them, up to the screen's edges.
             .floatingBars(top: topBar, bottom: bottomBar)
             .background(Palette.background)
-            // 操控手机's row says whether iCTRL runs; it changes while the user is in iCTRL.
             .task { await phoneControl.refresh() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -141,6 +147,28 @@ struct DrawerView: View {
         }
         .onChange(of: searchRequest) { openSearch() }
         .fullScreenCover(isPresented: $searchOpen, onDismiss: { search = "" }) { searchPage }
+    }
+
+    /// 抽屉顶上那个通栏「新对话」按钮。
+    private var newConversationFullRow: some View {
+        Button { Haptics.tap(); startLocalConversation() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.pencil").font(.callout.weight(.semibold))
+                Text("新对话").font(.callout.weight(.semibold)).lineLimit(1)
+            }
+            .foregroundStyle(Palette.onInk)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 48)
+            .background(Palette.ink, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(app.workspaces.isEmpty)
+        .opacity(app.workspaces.isEmpty ? 0.4 : 1)
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+        .plainRow()
     }
 
     // MARK: On the tab bar
@@ -194,25 +222,41 @@ struct DrawerView: View {
 
     /// The app's name, and search one tap away. No fill of its own: the list shows through.
     private var topBar: some View {
-        HStack(spacing: 8) {
-            Text(verbatim: "Fish Pocket").font(.title2.weight(.bold)).foregroundStyle(Palette.ink)
+        HStack(spacing: 9) {
+            drawerAvatar
+            Text(verbatim: "Fish Pocket").font(.title3.weight(.bold)).foregroundStyle(Palette.ink)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             Button { Haptics.tap(); openSearch() } label: {
                 Image(systemName: "magnifyingglass").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 40)
                     .floatingGlass(in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("搜索会话")
         }
-        .padding(.leading, 20)
+        .padding(.leading, 18)
         .padding(.trailing, 12)
         .padding(.top, 6)
         .padding(.bottom, 6)
         // A bar, as the system's are: its controls have fixed sizes and do not grow without limit.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    /// 抽屉左上角那只鲸鱼娘，和 App 图标是同一张。
+    private var drawerAvatar: some View {
+        Group {
+            if let url = Bundle.main.url(forResource: "pet-avatar", withExtension: "png"),
+               let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Circle().fill(Palette.control)
+            }
+        }
+        .frame(width: 30, height: 30)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 
     // MARK: Search
@@ -296,17 +340,26 @@ struct DrawerView: View {
     /// Over the list's bottom: settings (the account's picture once signed in) and the new
     /// conversation button, the one filled control here. The engine shows only when it is not running.
     private var bottomBar: some View {
-        HStack(spacing: 10) {
-            settingsButton
-            if let engineStatus {
-                Text(engineStatus).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+        VStack(spacing: 0) {
+            Divider().opacity(0.4)
+            Button(action: openSettings) {
+                HStack(spacing: 12) {
+                    Image(systemName: "gearshape").font(.callout).foregroundStyle(Palette.ink).frame(width: 22)
+                    Text("设置").font(.subheadline).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    if let engineStatus {
+                        Text(engineStatus).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                    }
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.secondary)
+                }
+                .padding(.horizontal, 18)
+                .frame(minHeight: 50)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
-            newConversationButton
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("设置"))
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+        .padding(.bottom, 6)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
@@ -517,7 +570,7 @@ struct DrawerView: View {
     /// What the list under it is, and how it is grouped: the view menu sits with the sessions it arranges.
     private var sessionsHeader: some View {
         HStack(spacing: 8) {
-            Text("会话").font(.footnote).foregroundStyle(Palette.secondary).accessibilityAddTraits(.isHeader)
+            Text("最近对话").font(.footnote).foregroundStyle(Palette.secondary).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             viewMenu()
         }

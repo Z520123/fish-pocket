@@ -1,5 +1,6 @@
 import SafariServices
 import SwiftUI
+import UniformTypeIdentifiers
 import WatchConnectivity
 
 /// Settings: only what people come here for (账号, 模型, 访问模式, 插件, 自动化, 后台运行: 静音音频,
@@ -65,6 +66,11 @@ private struct SettingsList: View {
     @AppStorage(WidgetSnapshotWriter.showTitlesKey) private var widgetTitles = true
     /// 聊天页右下角的桌宠（dsh-Go 的 Deepy 小鲸鱼）。
     @AppStorage("dsh.pet.visible") private var petVisible = true
+    /// 桌宠大小档：0 小、1 标准、2 大。
+    @AppStorage("dsh.pet.size") private var petSize = 1
+    @ObservedObject private var petStore = PetStore.shared
+    @State private var petImporting = false
+    @State private var petMessage: String?
     /// Pushed from the 探索 tab rather than the root of the sheet (`SettingsView.pushed`).
     let pushed: Bool
 
@@ -181,10 +187,48 @@ private struct SettingsList: View {
 
             Section {
                 Toggle(isOn: $petVisible) { Label("桌宠", systemImage: "pawprint") }
+                if petVisible {
+                    Menu {
+                        Button {
+                            petStore.currentID = PetStore.builtinID
+                        } label: {
+                            Label("Deepy 小鲸鱼（内置）", systemImage: petStore.usingBuiltin ? "checkmark" : "fish")
+                        }
+                        if !petStore.packs.isEmpty {
+                            Section("导入的宠物") {
+                                ForEach(petStore.packs) { pack in
+                                    Button {
+                                        petStore.currentID = pack.id
+                                    } label: {
+                                        Label(pack.name, systemImage: petStore.currentID == pack.id ? "checkmark" : "pawprint")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Label("我的宠物", systemImage: "square.grid.2x2")
+                            Spacer()
+                            Text(petStore.usingBuiltin ? "Deepy 小鲸鱼" : (petStore.current?.name ?? ""))
+                                .foregroundStyle(Palette.secondary)
+                        }
+                    }
+                    Picker(selection: $petSize) {
+                        Text("小").tag(0)
+                        Text("标准").tag(1)
+                        Text("大").tag(2)
+                    } label: {
+                        Label("大小", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .pickerValueTint()
+                    Button { petImporting = true } label: {
+                        Label("宠物仓库 · 导入宠物包", systemImage: "square.and.arrow.down")
+                    }
+                }
             } header: {
                 Text("宠物")
             } footer: {
-                Text("聊天页右下角的小鲸鱼（Deepy），点一下有反应。宠物包来自 dsh-Go 开源仓库。")
+                Text("桌宠在聊天页底部，可以左右拖着走，点一下有反应。宠物包用 dsh-Go 创意工坊的 zip（pack.json + 平铺 PNG）。")
             }
 
             Section {
@@ -248,6 +292,31 @@ private struct SettingsList: View {
         } message: {
             Text("新会话将减少确认步骤，可以直接改文件、跑命令。仅在信任后续任务时使用。")
         }
+            .fileImporter(isPresented: $petImporting, allowedContentTypes: [.zip]) { result in
+                switch result {
+                case .success(let url):
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    let copy = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+                    try? FileManager.default.removeItem(at: copy)
+                    do {
+                        try FileManager.default.copyItem(at: url, to: copy)
+                        let pack = try petStore.importZip(copy)
+                        petMessage = "已导入「\(pack.name)」"
+                        Haptics.success()
+                    } catch {
+                        petMessage = error.localizedDescription
+                    }
+                    try? FileManager.default.removeItem(at: copy)
+                case .failure:
+                    break
+                }
+            }
+            .alert("宠物", isPresented: Binding(get: { petMessage != nil }, set: { if !$0 { petMessage = nil } })) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(petMessage ?? "")
+            }
         .followSettings()
         .task { await load() }
         .task(id: app.settingsRevision) { await loadDerived() }

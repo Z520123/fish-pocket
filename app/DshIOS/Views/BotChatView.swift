@@ -71,21 +71,20 @@ private struct BotTitle: View {
 
     var body: some View {
         let team = app.botTeam
-        HStack(spacing: 8) {
-            BotAvatar(bot: bot, size: 28, live: true)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(bot.name).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+        HStack(spacing: 10) {
+            BotAvatar(bot: bot, size: 40, live: true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(bot.name).font(.headline).foregroundStyle(Palette.ink)
                 if let doing = team.doingText(bot.id) {
-                    AILabelledSubtitle { Text(doing).font(.caption2).foregroundStyle(team.isWorking(bot.id) ? Palette.running : Palette.waiting) }
-                } else if !bot.role.isEmpty {
-                    AILabelledSubtitle {
-                        HStack(spacing: 4) {
-                            Circle().fill(Palette.running).frame(width: 5, height: 5)
-                            Text(bot.role).font(.caption2).foregroundStyle(Palette.secondary)
-                        }
+                    HStack(spacing: 5) {
+                        Circle().fill(team.isWorking(bot.id) ? Palette.running : Palette.waiting).frame(width: 6, height: 6)
+                        Text(doing).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
                     }
                 } else {
-                    AIContentLabel()
+                    HStack(spacing: 5) {
+                        Circle().fill(Palette.running).frame(width: 6, height: 6)
+                        Text("本机 · 在线").font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                    }
                 }
             }
         }
