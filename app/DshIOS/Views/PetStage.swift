@@ -98,27 +98,30 @@ struct PetStage: View {
         return PetSpec(image: builtin.image(), anim: builtin.anim)
     }
 
-    /// 一张图集按格切：整图放大后平移到当前格，外面裁一个 `box` 大小的窗口。
+    /// 一张图集按格切：整张图缩到「每格 = box 的大小」，再平移到当前格，外面裁一个 box 大的窗口。
+    ///
+    /// 尺度以 `box` 为准（dsh-Go 的 canvas 单位），不是 PNG 的像素：图集里一格 180px，
+    /// 但 box 只有 36 个单位，按像素算会让宠物被裁成一个角。`box` 在格子里的偏移按比例补上。
     @ViewBuilder
     private func sprite(_ spec: PetSpec, k: CGFloat) -> some View {
         let anim = spec.anim
-        let cols = anim.cols
+        let cols = max(anim.cols, 1)
         let rows = max(1, Int(ceil(Double((anim.indexes.max() ?? 0) + 1) / Double(cols))))
-        let cellW = anim.frameW * k
-        let cellH = anim.frameH * k
-        let slot = anim.indexes[min(frame, anim.indexes.count - 1)]
+        let cellW = anim.box.width * k
+        let cellH = anim.box.height * k
+        let slot = anim.indexes[min(frame, max(anim.indexes.count - 1, 0))]
         if let image = spec.image {
             Image(uiImage: image)
                 .resizable()
                 .interpolation(.none)
                 .frame(width: cellW * CGFloat(cols), height: cellH * CGFloat(rows))
-                .offset(x: -CGFloat(slot % cols) * cellW - anim.box.minX * k,
-                        y: -CGFloat(slot / cols) * cellH - anim.box.minY * k)
-                .frame(width: anim.box.width * k, height: anim.box.height * k, alignment: .topLeading)
+                .offset(x: -CGFloat(slot % cols) * cellW,
+                        y: -CGFloat(slot / cols) * cellH)
+                .frame(width: cellW, height: cellH, alignment: .topLeading)
                 .clipped()
                 .contentShape(Rectangle())
         } else {
-            Color.clear.frame(width: anim.box.width * k, height: anim.box.height * k)
+            Color.clear.frame(width: cellW, height: cellH)
         }
     }
 
@@ -169,8 +172,9 @@ struct PetAnimation {
             sheet: sheet,
             anim: PetAnim(
                 sheet: Bundle.main.url(forResource: sheet, withExtension: "png") ?? URL(fileURLWithPath: "/"),
-                frameW: box.width * 5,
-                frameH: box.height * 5,
+                // dsh-Go 的图集一格是 180×120 像素，box 用 canvas 单位写的。
+                frameW: 180,
+                frameH: 120,
                 cols: cols,
                 box: box,
                 indexes: Array(0..<count),

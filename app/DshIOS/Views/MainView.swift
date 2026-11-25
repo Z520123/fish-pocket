@@ -901,6 +901,34 @@ struct MainView: View {
     /// group, pushed, keeps it: the input sits above it.
     @available(iOS 18.0, *)
     private var tabLayout: some View {
+        // 设计稿的抽屉浮在整页上：聊天页点头像打开，点暗处关掉。
+        ZStack(alignment: .leading) {
+            tabBar
+            if drawerOpen { tabDrawerLayer }
+        }
+        .animation(.snappy(duration: 0.25), value: drawerOpen)
+    }
+
+    /// 抽屉浮在 tab 布局上（tab 布局原来没有可滑出的抽屉）。
+    private var tabDrawerLayer: some View {
+        GeometryReader { geometry in
+            let width = min(326, geometry.size.width - 64)
+            ZStack(alignment: .leading) {
+                Palette.scrim
+                    .ignoresSafeArea()
+                    .onTapGesture { setDrawer(false) }
+                    .accessibilityLabel("关闭侧边栏")
+                    .accessibilityAddTraits(.isButton)
+                drawer
+                    .frame(width: width)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+        }
+        .transition(.opacity.combined(with: .move(edge: .leading)))
+    }
+
+    @available(iOS 18.0, *)
+    private var tabBar: some View {
         TabView(selection: $tab) {
             Tab(value: HomeTab.sessions) {
                 Group { if sessionsSideBySide { sessionsSplit } else { sessionsStack } }
@@ -937,6 +965,14 @@ struct MainView: View {
     /// a phone held sideways (the big ones are wide then) keeps the 会话 and Bot tabs' lists beside
     /// the chat, as it is from iOS 18.
     private var phoneTabLayout: some View {
+        ZStack(alignment: .leading) {
+            phoneTabBar
+            if drawerOpen { tabDrawerLayer }
+        }
+        .animation(.snappy(duration: 0.25), value: drawerOpen)
+    }
+
+    private var phoneTabBar: some View {
         TabView(selection: $tab) {
             Group { if sessionsSideBySide { sessionsSplit } else { sessionsStack } }
                 .tabItem { tabLabel(Text(DrawerView.sessionsTitle), "fp.message", custom: true) }
