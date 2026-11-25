@@ -19,6 +19,7 @@ typedef void (*DshNativeHandler)(NSString *op, NSDictionary *args, DshNativeRepl
 
 // Capability handlers. One per caps_*.m.
 void dsh_native_device(NSString *op, NSDictionary *args, DshNativeReply reply);
+void dsh_native_phone(NSString *op, NSDictionary *args, DshNativeReply reply);
 void dsh_native_notify(NSString *op, NSDictionary *args, DshNativeReply reply);
 void dsh_native_calendar(NSString *op, NSDictionary *args, DshNativeReply reply);
 void dsh_native_reminders(NSString *op, NSDictionary *args, DshNativeReply reply);
