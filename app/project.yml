@@ -197,9 +197,9 @@ targets:
         # 本机能力「提醒」。同样的理由：第二句是产品选择，不是硬性要求。
         NSRemindersFullAccessUsageDescription: 让智能体按你的要求查看和创建提醒。为回答你的问题，相关提醒内容会随对话发送给你选择的模型服务商。
         NSPhotoLibraryAddUsageDescription: 把分享海报和交流群二维码保存到相册。
-        # 本机能力「位置」。只要 when-in-use，不做任何后台或持续定位，所以第一句
-        # 就说清楚是「用到的时候问一次」，免得用户以为我们在跟着他。
-        NSLocationWhenInUseUsageDescription: 让智能体在你问「我在哪」「附近有什么」时读取一次当前位置。只在用到时读，不会持续记录。为回答你的问题，位置会随对话发送给你选择的模型服务商。
+        # 本机能力「位置」，也是「本机操控」的定位保活。两者共用一个权限，所以文案必须把
+        # 「持续定位」说出来：用户在这里允许的是两件事，不能只写便宜的那一件。
+        NSLocationWhenInUseUsageDescription: 让智能体在你问「我在哪」「附近有什么」时读取一次当前位置；打开「操控手机 → 本机操控 → 定位保活」后，App 退到后台也会持续更新位置，以免智能体点按到一半被系统挂起。为回答你的问题，位置会随对话发送给你选择的模型服务商。
         # 本机能力「健康」。iOS 查不到读权限的状态（Apple 故意不给，防推断），
         # 所以这个框是用户唯一一次被完整告知的机会，必须把「会发给模型服务商」
         # 说在前面（§6.1）。只读，App 从不请求写权限。
@@ -235,7 +235,10 @@ targets:
           NSAllowsArbitraryLoadsInWebContent: true
         # BackgroundKeeper: silent audio when 设置 → 后台运行 →「静音音频」 is on (the default),
         # and continued-processing tasks while sessions run when「任务续跑」 is on (iOS 26, off by default).
-        UIBackgroundModes: [audio]
+        # location: 本机操控的定位保活 (PhoneLink's LocationKeepAlive). A tap or a read that is in
+        # flight must survive the user switching apps, and iOS suspends a background app without one.
+        # The switch is off by default in 操控手机 → 本机操控.
+        UIBackgroundModes: [audio, location]
         BGTaskSchedulerPermittedIdentifiers: ["$(PRODUCT_BUNDLE_IDENTIFIER).task.*"]
         # Agent status on the lock screen and in the Dynamic Island (LiveActivityController).
         NSSupportsLiveActivities: true
