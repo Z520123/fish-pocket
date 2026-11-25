@@ -65,6 +65,23 @@ class IosNativeService extends Service {
   }
 }
 
+// A capability can carry more than one tool. The phone's execution layer is the
+// only one so far: `phone` is the capability, and each operation group has its
+// own tool, so those keys have to be mapped back to the capability that owns
+// them. Without this the loop below sees no `available.phoneState` and drops
+// every phone tool except the one keyed `phone`.
+const TOOL_CAPABILITY = {
+  phoneState: 'phone',
+  phoneScreen: 'phone',
+  phoneTap: 'phone',
+  phoneSwipe: 'phone',
+  phoneType: 'phone',
+  phoneScreenshot: 'phone',
+  phonePress: 'phone',
+  phoneApp: 'phone',
+  phoneStop: 'phone',
+};
+
 export default function IosNative(ctx) {
   const available = capabilities();
   if (available === null) {
@@ -84,10 +101,11 @@ export default function IosNative(ctx) {
   // capability is missing is never registered, so the addon's table stays the
   // single source of truth for what exists.
   ctx.inject(['tools'], (toolsCtx) => {
-    for (const [capability, tool] of Object.entries(TOOLS)) {
+    for (const [key, tool] of Object.entries(TOOLS)) {
+      const capability = TOOL_CAPABILITY[key] ?? key;
       if (available[capability] === undefined) continue;
       const definition = typeof tool === 'function' ? tool(toolsCtx) : tool;
-      toolsCtx.effect(() => toolsCtx.tools.register(definition), `ios-native ${capability} tool`);
+      toolsCtx.effect(() => toolsCtx.tools.register(definition), `ios-native ${key} tool`);
     }
     toolsCtx.logger.info('native capabilities: %s', Object.keys(available).join(', '));
   });

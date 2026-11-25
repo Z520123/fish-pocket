@@ -2123,6 +2123,22 @@ const phoneApp = defineTool({
   execute: ({ bundle, action }) => invoke('phone', 'app', { bundle, action }),
 });
 
+const phoneStop = defineTool({
+  name: 'phone_stop',
+  description:
+    'Stop driving this iPhone: end the automation session so iOS drops the "Automation Running" '
+    + 'banner and releases the screen. Call it when the taps, typing or screen reads are finished; '
+    + 'a session left open keeps that banner up.',
+  parameters: {},
+  output: {
+    schema: { type: 'json' },
+    render: (_args, value) => text(value && value.session && value.session.closed === false
+      ? 'stopped: no session was open'
+      : 'stopped: the session is closed'),
+  },
+  execute: () => invoke('phone', 'stop'),
+});
+
 // A tool is a definition, or a function of the registering context for the
 // few that need the engine itself.
 export const TOOLS = {
@@ -2156,4 +2172,5 @@ export const TOOLS = {
   phoneScreenshot: phoneScreenshot,
   phonePress: phonePress,
   phoneApp: phoneApp,
+  phoneStop: phoneStop,
 };
