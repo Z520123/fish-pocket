@@ -1,107 +1,137 @@
 import SwiftUI
 
-/// 「操控手机」（侧边栏的独立入口）：用户自己装的 iCTRL 在不在跑，以及从这里启动、停止它。
+/// 「操控手机」：这个 App 自己操作这台手机，不走 iCTRL、不走电脑。
 ///
-/// iCTRL 是第三方开源 App，靠 XCUITest 在本机提供一个只听 127.0.0.1:8200 的自动化服务，
-/// 智能体通过它点按、输入、读别的 App 的屏幕（用法写在内置 skill 的
-/// `references/phone-control.md`）。这里只做桥：查它的公开状态接口、打开它自己的
-/// `ictrl://start` / `ictrl://stop` 链接。装它、签名、挂开发者镜像都在 iCTRL 和
-/// SideStore 里，本 App 不碰；详细步骤放在官网教程里，页面里只给入口。
+/// 配对、下载开发者镜像、挂载镜像、定位保活和测试会话都在这一个页面里。智能体点按、
+/// 输入、读屏全部在 App 自己的进程里完成；挂载那一步需要一条把 10.7.0.1 绕回本机的隧道，
+/// 下载和挂载因为网络条件相反，所以是两个按钮。
 struct PhoneControlView: View {
-    @State private var service = PhoneControlService()
-    @AppStorage(PhoneRecorder.enabledKey) private var recording = true
-    @Environment(\.scenePhase) private var scenePhase
+    @State private var state: [String: Any] = [:]
+    @State private var message: String?
+    @State private var busy = false
+
+    private var stage: String { state["stage"] as? String ?? "idle" }
+    private var detail: String { state["detail"] as? String ?? "" }
+    private var pin: String { state["pin"] as? String ?? "" }
+    private var paired: Bool { state["paired"] as? Bool ?? false }
+    private var imagePresent: Bool { state["ddi"] as? Bool ?? false }
+    private var keepAlive: Bool { state["locationKeepAlive"] as? Bool ?? false }
 
     var body: some View {
         List {
             Section {
-                NavigationLink {
-                    PhoneSetupView()
-                } label: {
-                    Label("本机操控", systemImage: "iphone.gen3")
-                }
-            } header: {
-                Text("不用 iCTRL")
-            } footer: {
-                Text("这个 App 自己配对、自己下载开发者镜像、自己挂载，点按、输入、读屏都在它自己的进程里。iOS 重启后要重新挂一次镜像，挂载那一步需要一条把 10.7.0.1 绕回本机的隧道。")
-            }
-            .groupedRow()
-
-            Section {
                 LabeledContent {
                     HStack(spacing: 6) {
-                        Circle().fill(service.state.tint).frame(width: 8, height: 8)
-                        Text(service.state.title)
+                        Circle().fill(tint).frame(width: 8, height: 8)
+                        Text(title)
                     }
                     .foregroundStyle(.secondary)
                 } label: {
-                    Label("iCTRL 服务", systemImage: "hand.tap")
+                    Label("本机操控", systemImage: "iphone.gen3")
                 }
-                switch service.state {
-                case .running:
-                    Button("停止服务", role: .destructive) { service.stop() }
-                case .stopped:
-                    Button("启动服务") { service.start() }
-                case .notInstalled, .checking:
-                    EmptyView()
+                if !detail.isEmpty {
+                    Text(detail).font(.footnote).foregroundStyle(.secondary)
                 }
-            } footer: {
-                switch service.state {
-                case .running:
-                    Text("智能体现在可以替你点按、输入、读取其他 App 的屏幕。它操作时屏幕会被占用，顶部会显示 iOS 的「Automation Running」提示；同时按住两个音量键也能停止。点「停止服务」后 iCTRL 会发一条通知，长按它并点「停止」才会真的停下。")
-                case .stopped:
-                    Text("启动后智能体才能操作其他 App。如果点了没反应、或 iCTRL 打不开，多半是签名过期了：免费 Apple ID 签的 App 每 7 天要在 SideStore 里刷新一次。")
-                case .notInstalled:
-                    Text("这个功能要先在手机上装好 iCTRL（第三方开源 App，需要开发者模式），本 App 不会替你安装。")
-                case .checking:
-                    EmptyView()
-                }
-            }
-            .groupedRow()
-
-            Section {
-                Toggle(isOn: $recording) {
-                    Label("录下操作过程", systemImage: "record.circle")
-                }
-            } footer: {
-                Text("智能体操作其他 App 时，把屏幕录下来，放在对话里那一轮的下面，可以倍速回看，也可以分享。录像只存在这台手机上，没有声音。")
-            }
-            .groupedRow()
-
-            Section {
-                Link(destination: AppLinks.phoneControlGuide) {
-                    LabeledContent {
-                        Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(.tertiary)
-                    } label: {
-                        Label("设置教程", systemImage: "book")
+                if !pin.isEmpty {
+                    LabeledContent("配对数字") {
+                        Text(pin).font(.system(.title2, design: .monospaced)).bold()
                     }
                 }
-            } header: {
-                Text("怎么装")
+                if paired {
+                    Label("已配对", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                } else {
+                    Button {
+                        PhoneLink.shared.startPairing()
+                    } label: {
+                        Label("开始配对", systemImage: "dot.radiowaves.left.and.right")
+                    }
+                    if stage == "pairing" {
+                        Button("取消配对", role: .destructive) { PhoneLink.shared.stopPairing() }
+                    }
+                }
             } footer: {
-                Text("需要 iOS 17.4 或更高版本，第一次设置要用一次电脑。教程里有常见问题。")
+                Text("配对：点「开始配对」后打开「设置」，里面会出现一个 Fish Pocket 的配对条目，点进去输入这一页显示的六位数字。")
             }
             .groupedRow()
 
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("先用本机能力", systemImage: "iphone")
-                        .font(.subheadline.weight(.semibold))
-                    Text("日历、提醒、通讯录、照片这类事，智能体会直接用本机能力去做，又快又准。只有必须点开别的 App 才能完成时，它才会用 iCTRL。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                Button {
+                    busy = true
+                    message = nil
+                    PhoneLink.shared.downloadImageOnly { problem in
+                        busy = false
+                        message = problem
+                        refresh()
+                    }
+                } label: {
+                    Label(imagePresent ? "镜像已下载" : "下载开发者镜像", systemImage: "arrow.down.circle")
                 }
-                .padding(.vertical, 4)
+                .disabled(busy || !paired || imagePresent)
+
+                Button {
+                    busy = true
+                    message = nil
+                    PhoneLink.shared.mountImage { problem in
+                        busy = false
+                        message = problem
+                        refresh()
+                    }
+                } label: {
+                    Label(busy ? "正在挂载…" : "挂载镜像", systemImage: "externaldrive.connected.to.line.below")
+                }
+                .disabled(busy || !imagePresent)
+            } header: {
+                Text("镜像")
+            } footer: {
+                Text("下载和挂载是两件事，因为网络要求正好相反：下载走 GitHub，要能连上 GitHub（代理或全局 VPN）；挂载连的是本机自己的 10.7.0.1，要的是把那个地址绕回本机的隧道。先关隧道下载，再开隧道挂载。\n\niOS 重启后镜像要重新挂一次，文件还在，只要再点「挂载镜像」。挂上以后，点按、输入、读屏都不再走那条隧道。")
+            }
+            .groupedRow()
+
+            Section {
+                if let message {
+                    Text(message).font(.footnote).foregroundStyle(.red)
+                }
+                Button {
+                    busy = true
+                    message = nil
+                    DispatchQueue.global().async {
+                        let probe = DshPhonePrepareSession() as? [String: Any] ?? [:]
+                        DispatchQueue.main.async {
+                            busy = false
+                            message = (probe["ok"] as? Bool ?? false)
+                                ? "会话开起来了：\(probe["seconds"] ?? "?") 秒"
+                                : "会话被拒：\(probe["code"] ?? "未知") \(probe["detail"] ?? "")"
+                        }
+                    }
+                } label: {
+                    Label("测试会话", systemImage: "waveform.path.ecg")
+                }
+                .disabled(busy)
+            } footer: {
+                Text("只开一次自动化会话，什么都不点。第一次会弹 iOS 的授权，允许一次即可。")
+            }
+            .groupedRow()
+
+            Section {
+                Toggle(isOn: Binding(
+                    get: { keepAlive },
+                    set: { on in
+                        PhoneLink.shared.locationKeepAlive = on
+                        refresh()
+                    }
+                )) {
+                    Label("定位保活", systemImage: "location.fill")
+                }
+            } footer: {
+                Text("打开以后，App 退到后台也会一直有一条定位在更新，智能体点按到一半切出去也不会被挂起。代价是耗电，并且「设置」里的定位服务会显示 App 正在使用位置。")
+            }
+            .groupedRow()
+
+            Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("截图会发给模型服务商", systemImage: "eye")
                         .font(.subheadline.weight(.semibold))
                     Text("智能体看到的其他 App 画面，会随对话发给你选的模型服务商。付款、删除、替你发消息前，它会先问你；密码和验证码由你自己输入。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("保持「仅本机」", systemImage: "lock")
-                        .font(.subheadline.weight(.semibold))
-                    Text("iCTRL 自带远程访问和近场发现，打开后同一网络里的设备也能请求控制这台手机。用本 App 时不需要它们，建议一直关着。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
@@ -113,78 +143,29 @@ struct PhoneControlView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("操控手机")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await service.refresh() }
-        // 从 iCTRL 回来（启动、停止都会跳过去）时重新查一次。
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await service.refresh() } }
-        }
+        .task { refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: PhoneLink.stateChanged)) { _ in refresh() }
     }
-}
 
-@MainActor @Observable
-final class PhoneControlService {
-    enum State: Equatable {
-        case checking, notInstalled, stopped, running
+    private func refresh() { state = PhoneLink.shared.stateJSON() }
 
-        var title: String {
-            switch self {
-            case .checking: String(localized: "检查中…")
-            case .notInstalled: String(localized: "未安装")
-            case .stopped: String(localized: "未运行")
-            case .running: String(localized: "运行中")
-            }
-        }
-
-        var tint: Color {
-            switch self {
-            case .running: .green
-            case .stopped: .orange
-            case .notInstalled, .checking: .gray
-            }
+    private var title: String {
+        switch stage {
+        case "pairing": return "等你配对"
+        case "downloading": return "下载镜像"
+        case "mounting": return "挂载中"
+        case "ready": return "可以操控"
+        case "failed": return "出错了"
+        default: return paired ? "已配对" : "还没配"
         }
     }
 
-    private(set) var state: State = .checking
-
-    /// iCTRL's unauthenticated status endpoint; it answers only on this phone.
-    private static let whoami = URL(string: "http://127.0.0.1:8200/whoami")!
-    private static let probe = URL(string: "ictrl://")!
-
-    func refresh() async {
-        guard UIApplication.shared.canOpenURL(Self.probe) else {
-            state = .notInstalled
-            return
+    private var tint: Color {
+        switch stage {
+        case "ready": return .green
+        case "failed": return .red
+        case "pairing", "downloading", "mounting": return .orange
+        default: return paired ? .green : .secondary
         }
-        state = await Self.isRunning() ? .running : .stopped
-    }
-
-    /// Opens the runner the same way iCTRL's own 启动服务 does; it hands control back through the callback.
-    func start() {
-        open("ictrl://start?callback=\(DshLink.scheme)://")
-        Task {
-            // The runner needs a few seconds; we are usually back by then.
-            for _ in 0..<10 {
-                try? await Task.sleep(for: .seconds(1))
-                if await Self.isRunning() { state = .running; return }
-            }
-        }
-    }
-
-    /// Any app may ask; iCTRL then asks the user to confirm with a notification.
-    func stop() {
-        open("ictrl://stop?callback=\(DshLink.scheme)://")
-    }
-
-    private func open(_ link: String) {
-        guard let url = URL(string: link) else { return }
-        UIApplication.shared.open(url)
-    }
-
-    private static func isRunning() async -> Bool {
-        var request = URLRequest(url: whoami, timeoutInterval: 1.5)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse else { return false }
-        return http.statusCode == 200
     }
 }
