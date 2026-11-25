@@ -86,6 +86,9 @@ targets:
       - path: ../native/ffmpeg/binding.c
     dependencies:
       - package: PokiCore
+      # The phone's Rust library (pairing, developer-image mounting, the runner),
+      # built by the CI step before xcodegen runs.
+      - library: ../vendor/poki-launcher/libpoki_launcher.a
       # First: the app's own libc calls (libgit2) bind to it by link order, as Node's do by its load command.
       - target: DshRoot
       - framework: ../vendor/nodejs-mobile/rooted/NodeMobile.xcframework
