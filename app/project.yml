@@ -72,6 +72,9 @@ targets:
       - path: ../native/image
       # The iOS frameworks the agent may reach, behind N-API: linked binding `dsh_ios_native`.
       - path: ../native/ios-native
+      # Poki's execution layer: opens the automation session and puts touches on the screen
+      # through the developer frameworks a mounted DDI provides.
+      - path: ../native/poki-phone
       # The engine's filesystem view, for the Node entry points libc cannot reach: linked binding `dsh_root`.
       - path: ../native/root/binding.c
       # Python for the engine: embedded CPython, one subinterpreter per process: linked binding `dsh_python`.
