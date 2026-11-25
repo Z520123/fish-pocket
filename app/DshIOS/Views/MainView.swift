@@ -903,25 +903,27 @@ struct MainView: View {
     private var tabLayout: some View {
         TabView(selection: $tab) {
             Tab(value: HomeTab.sessions) {
-                if sessionsSideBySide { sessionsSplit } else { sessionsStack }
+                Group { if sessionsSideBySide { sessionsSplit } else { sessionsStack } }
+                    .toolbar(.hidden, for: .tabBar)
             } label: {
                 tabLabel(Text(DrawerView.sessionsTitle), "fp.message", custom: true)
             }
             .badge(badges.waiting)
             Tab(value: HomeTab.bot) {
-                if sessionsSideBySide { botSplit } else { botStack(openDrawer: { setDrawer(true) }) }
+                Group { if sessionsSideBySide { botSplit } else { botStack(openDrawer: { setDrawer(true) }) } }
+                    .toolbar(.hidden, for: .tabBar)
             } label: {
                 tabLabel(Text(verbatim: "Bot"), "fp.bot", custom: true)
             }
             .badge(badges.botPending)
             Tab(value: HomeTab.explore) {
                 ExploreTabView(path: $explorePath)
+                    .toolbar(.hidden, for: .tabBar)
             } label: {
                 tabLabel(Text("探索"), "square.grid.2x2")
             }
         }
         .tabViewStyle(.sidebarAdaptable)
-        .toolbar(.hidden, for: .tabBar)
         .background(TabBarAppearanceFollower())
         // iPhone Duo open keeps a column at its trailing edge for the bar buttons and the tab bar. The
         // system settles what goes there when the tab view is made: made folded, then opened, the
@@ -1091,7 +1093,7 @@ struct MainView: View {
     private func botList(openDrawer: (() -> Void)?, path: Binding<[BotRoute]>) -> some View {
         BotHomeView(openDrawer: openDrawer, open: { path.wrappedValue = [$0] })
             .navigationDestination(for: BotRoute.self) { route in
-                botPage(route)
+                botPage(route, openDrawer: openDrawer)
                     // Set here as well: what the split view sets does not reach a pushed page. A pushed
                     // chat has a back button where the conversation has its sidebar button, so the
                     // sidebar's goes beside it. On the tab bar there is no sidebar: no button for one.
@@ -1155,9 +1157,9 @@ struct MainView: View {
     }
 
     @ViewBuilder
-    private func botPage(_ route: BotRoute) -> some View {
+    private func botPage(_ route: BotRoute, openDrawer: (() -> Void)? = nil) -> some View {
         switch route {
-        case .bot(let id): BotChatView(botId: id)
+        case .bot(let id): BotChatView(botId: id, openDrawer: openDrawer)
         case .room(let id): BotRoomView(roomId: id)
         }
     }

@@ -5,6 +5,8 @@ import SwiftUI
 struct BotChatView: View {
     @Environment(AppModel.self) private var app
     let botId: String
+    /// 从抽屉进出：给了就在聊天页左上角放抽屉按钮，和会话页一样。
+    var openDrawer: (() -> Void)?
     @State private var detailOpen = false
     @State private var detailTab = BotDetailView.Tab.profile
     @State private var sideChatOpen = false
@@ -15,7 +17,7 @@ struct BotChatView: View {
     var body: some View {
         let team = app.botTeam
         if let bot = team.bot(botId) {
-            ConversationView(sessionId: bot.sessionId, selection: $selection, openDrawer: nil, bot: BotChrome(
+            ConversationView(sessionId: bot.sessionId, selection: $selection, openDrawer: openDrawer, bot: BotChrome(
                 title: AnyView(Button { detailOpen = true } label: { BotTitle(bot: bot).modifier(BotTitleCapsule()) }
                     .buttonStyle(.plain)
                     .accessibilityHint("查看 Bot 详情")),
