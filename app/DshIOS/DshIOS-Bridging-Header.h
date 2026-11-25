@@ -15,3 +15,11 @@
 #import "root.h"
 // WebRTC's echo canceller for the voice call (native/aec3): plain C in front of C++.
 #import "dsh_aec3.h"
+
+// 手机操控（native/poki-launcher）：把自己和本机配对、把开发者镜像挂上。Rust 的 C 接口，
+// 只有 PhoneLink.swift 调它。镜像的下载和校验在 PokiCore 里，点按和读屏在 native/poki-phone。
+#include "../../native/poki-launcher/include/poki_launcher.h"
+// native/ios-native/caps_phone.m 交给 Swift 的两道门：镜像在不在、会话能不能开。PhoneLink
+// 靠它们决定要不要去下载镜像。
+FOUNDATION_EXPORT BOOL DshPhoneFrameworksAvailable(void);
+FOUNDATION_EXPORT NSDictionary<NSString *, id> *DshPhonePrepareSession(void);
