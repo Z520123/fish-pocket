@@ -18,6 +18,10 @@ packages:
   SwiftMath:
     url: https://github.com/mgriebling/SwiftMath
     exactVersion: 1.7.3
+  # Poki's phone-side core, vendored: look/do, approvals, the in-process runner
+  # transport. MIT-free here on purpose — it is AGPL-3.0, so this fork stays local.
+  PokiCore:
+    path: ../native/poki-core
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -78,6 +82,7 @@ targets:
       # Only the binding: tool.c and the rest of native/ffmpeg go into FFmpeg.framework.
       - path: ../native/ffmpeg/binding.c
     dependencies:
+      - package: PokiCore
       # First: the app's own libc calls (libgit2) bind to it by link order, as Node's do by its load command.
       - target: DshRoot
       - framework: ../vendor/nodejs-mobile/rooted/NodeMobile.xcframework
