@@ -26,6 +26,11 @@ struct BotChatView: View {
                 tools: true
             ))
             .id(bot.sessionId)
+            // 设计稿的主界面没有导航栏：头像、名字、在线状态直接浮在聊天顶上，头像点开抽屉。
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                BotHeader(bot: bot, openDrawer: openDrawer) { detailOpen = true }
+            }
             .environment(\.botTimeline, BotTimeline(hiddenTurns: team.hiddenTurns(of: bot), earlierFrom: bot.parts.isEmpty ? nil : bot.sessionId, showsThinking: team.showsThinking, sessionId: bot.sessionId))
             .environment(\.botComposer, .bot(bot.id))
             .environment(\.userBubbleTint, team.bubbleTint(of: bot))
@@ -63,6 +68,51 @@ struct BotChatView: View {
         } else {
             ContentUnavailableView("这个 Bot 已不在团队里", systemImage: "person.slash")
         }
+    }
+}
+
+/// 聊天页顶上那一条：大头像、名字、在线状态。没有导航栏，头像就是抽屉入口。
+private struct BotHeader: View {
+    @Environment(AppModel.self) private var app
+    let bot: BotInfo
+    var openDrawer: (() -> Void)?
+    var openDetail: () -> Void
+
+    var body: some View {
+        let team = app.botTeam
+        HStack(spacing: 11) {
+            Button {
+                Haptics.tap()
+                openDrawer?()
+            } label: {
+                BotAvatar(bot: bot, size: 42, live: true)
+            }
+            .buttonStyle(.plain)
+            .disabled(openDrawer == nil)
+            .accessibilityLabel(Text("打开会话列表"))
+
+            Button(action: openDetail) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(bot.name).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(team.isWorking(bot.id) ? Palette.waiting : Palette.running)
+                            .frame(width: 6, height: 6)
+                        Text(team.doingText(bot.id) ?? String(localized: "本机 · 在线"))
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("查看 Bot 详情"))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 8)
+        .background(.regularMaterial)
     }
 }
 
