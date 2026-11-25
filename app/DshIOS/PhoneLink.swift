@@ -68,7 +68,8 @@ final class PhoneLink: NSObject {
             "stage": stage.rawValue,
             "detail": detail,
             "paired": fm.fileExists(atPath: pairingFile.path),
-            "ddi": fm.fileExists(atPath: ddiDir.appendingPathComponent("BuildManifest.plist").path),
+            "ddi": imageDownloaded,
+            "mounted": stage == .ready,
             "pin": pin,
             "locationKeepAlive": LocationKeepAlive.shared.running,
         ]
@@ -84,11 +85,12 @@ final class PhoneLink: NSObject {
     }
 
     private func set(_ new: Stage, _ text: String) {
-        let changed = (stage != new) || (detail != text)
-        stage = new
-        detail = text
-        if changed {
-            DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let changed = (self.stage != new) || (self.detail != text)
+            self.stage = new
+            self.detail = text
+            if changed {
                 NotificationCenter.default.post(name: PhoneLink.stateChanged, object: nil)
             }
         }
@@ -161,8 +163,56 @@ final class PhoneLink: NSObject {
 
     // MARK: - 镜像与挂载
 
-    /// 镜像挂了就能直接开会话；没挂就下载、再让 Rust 挂上。
-    /// `completion` 在主线程回调，成功时为空。
+    /// 镜像文件在不在，也就是下载过没有。注意这不等于是「可用」：文件在而没挂上，
+    /// Poki 那边叫 `downloaded`，本机这一步叫「已下载」。
+    var imageDownloaded: Bool {
+        fm.fileExists(atPath: ddiDir.appendingPathComponent("BuildManifest.plist").path)
+    }
+
+    /// 只下载开发者镜像，不碰 launcher。
+    ///
+    /// 下载和挂载的网络要求正好相反：下载走 GitHub，要能连上它（代理或全局 VPN）；挂载连的是
+    /// 本机自己的 10.7.0.1，要的是把那个地址绕回本机的隧道。两条同时开着常常谁都不通，所以
+    /// 这里是两个动作，两个按钮。
+    @objc func downloadImageOnly(_ completion: @escaping (String?) -> Void) {
+        set(.downloading, "正在从 GitHub 下载开发者镜像")
+        downloadImage { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .failure(let error):
+                let why = "下载失败：\(error.localizedDescription)。这一步要能连上 GitHub，重试前先把绕回本机的那条隧道关掉。"
+                self.set(.failed, why)
+                completion(why)
+            case .success(let build):
+                self.set(.idle, "镜像已下载（\(build)），下一步挂载")
+                completion(nil)
+            }
+        }
+    }
+
+    /// 只挂载：Rust 的 launcher 读配对文件连本机，把已经下载的镜像挂上去。
+    /// 这一步才需要那条隧道，也只有在它开着的时候才连得上。
+    @objc func mountImage(_ completion: @escaping (String?) -> Void) {
+        guard fm.fileExists(atPath: pairingFile.path) else {
+            completion("还没有配对：先点「开始配对」，在「设置」里输一次数字。")
+            return
+        }
+        guard imageDownloaded else {
+            completion("镜像还没下载：先点「下载开发者镜像」，那一步不用隧道。")
+            return
+        }
+        set(.mounting, "正在连本机、挂载镜像")
+        startLauncher { [weak self] problem in
+            if let problem {
+                self?.set(.failed, problem)
+            } else {
+                self?.set(.mounting, "连上了，等镜像挂完")
+            }
+            completion(problem)
+        }
+    }
+
+    /// 给能力用的入口：已经能用就什么都不做，否则走挂载（下载得由人来点，它要换网络）。
     @objc func prepareDevice(_ completion: @escaping (String?) -> Void) {
         if DshPhoneFrameworksAvailable() {
             set(.ready, "开发者镜像已在，可以直接操控")
@@ -173,35 +223,27 @@ final class PhoneLink: NSObject {
             completion("还没有配对：先在「操控手机」里点「开始配对」，在「设置」里输一次数字。")
             return
         }
-        set(.downloading, "正在下载开发者镜像")
-        downloadImage { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .failure(let error):
-                self.set(.failed, "下载开发者镜像失败：\(error.localizedDescription)")
-                completion("下载开发者镜像失败：\(error.localizedDescription)")
-            case .success:
-                self.set(.mounting, "正在挂载开发者镜像")
-                self.startLauncher { problem in
-                    if let problem { self.set(.failed, problem) }
-                    completion(problem)
-                }
-            }
+        guard imageDownloaded else {
+            completion("镜像还没下载：在「操控手机 → 本机操控」里点「下载开发者镜像」（不用隧道），再点「挂载镜像」（要隧道）。")
+            return
         }
+        mountImage(completion)
     }
 
     private func downloadImage(_ done: @escaping (Result<String, Error>) -> Void) {
         try? fm.createDirectory(at: ddiDir, withIntermediateDirectories: true)
         Task.detached { [weak self] in
             guard let self else { return }
+            let outcome: Result<String, Error>
             do {
                 let build = try await DeveloperDiskImage.ensure(in: self.ddiDir) { line in
                     self.set(.downloading, line)
                 }
-                done(.success(build))
+                outcome = .success(build)
             } catch {
-                done(.failure(error))
+                outcome = .failure(error)
             }
+            DispatchQueue.main.async { done(outcome) }
         }
     }
 
