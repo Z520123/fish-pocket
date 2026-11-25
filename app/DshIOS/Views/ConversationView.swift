@@ -162,7 +162,7 @@ struct ConversationView: View {
 
     /// 输入框下面那排 chips：本机操控、账号余额、模型（设计稿里排一行）。
     @ViewBuilder
-    private var composerChips: some View {
+    private func composerChips(_ model: SessionModel) -> some View {
         HStack(spacing: 5) {
             Button {
                 Haptics.tap()
@@ -373,7 +373,7 @@ struct ConversationView: View {
                         sheetUp: $inputSheetUp
                     )
                     .allowsHitTesting(presentedInteractionId(model) == nil)
-                    if !blank { composerChips }
+                    if !blank { composerChips(model) }
                 }
             }
             .padding(.horizontal, 12)
