@@ -15,6 +15,19 @@ struct PhoneControlView: View {
     var body: some View {
         List {
             Section {
+                NavigationLink {
+                    PhoneSetupView()
+                } label: {
+                    Label("本机操控", systemImage: "iphone.gen3")
+                }
+            } header: {
+                Text("不用 iCTRL")
+            } footer: {
+                Text("这个 App 自己配对、自己下载开发者镜像、自己挂载，点按、输入、读屏都在它自己的进程里。iOS 重启后要重新挂一次镜像，挂载那一步需要一条把 10.7.0.1 绕回本机的隧道。")
+            }
+            .groupedRow()
+
+            Section {
                 LabeledContent {
                     HStack(spacing: 6) {
                         Circle().fill(service.state.tint).frame(width: 8, height: 8)
