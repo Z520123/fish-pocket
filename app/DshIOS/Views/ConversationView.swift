@@ -189,8 +189,10 @@ struct ConversationView: View {
             .buttonStyle(.plain)
             Spacer(minLength: 0)
         }
-        .padding(.top, 1)
-        .padding(.leading, 2)
+        .padding(.top, 2)
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.bottom, 9)
         .sheet(isPresented: $chipModelPicker) { ModelSearchSheet(model: model, context: context) }
     }
 
@@ -339,7 +341,7 @@ struct ConversationView: View {
                 }
             }
         }
-        .background(Palette.background)
+        .background(Palette.control)
         .overlay { if blank { hero(model) } }
         // Above the composer: the transcript and the ✕ while the bar is held to talk.
         .overlay { VoiceHoldOverlay(voice: model.composer.voice) }
@@ -359,6 +361,8 @@ struct ConversationView: View {
                 if let notice = model.subagentReadOnly(parentAvailable: parentAvailable(model)) {
                     SubagentReadOnlyNotice(title: notice.title, detail: notice.detail)
                 } else {
+                    // 设计稿：输入框和下面三个 chips 装在同一个圆角大框里。
+                    VStack(alignment: .leading, spacing: 0) {
                     ComposerView(
                         model: model, context: context, pendingDraft: app.pendingDrafts[sessionId],
                         consumeDraft: { app.pendingDrafts[sessionId] = nil },
@@ -374,6 +378,13 @@ struct ConversationView: View {
                     )
                     .allowsHitTesting(presentedInteractionId(model) == nil)
                     if !blank { composerChips(model) }
+                    }
+                    .background(Palette.background, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .strokeBorder(Palette.control.opacity(0.9), lineWidth: 0.8)
+                    }
+                    .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
                 }
             }
             .padding(.horizontal, 12)
