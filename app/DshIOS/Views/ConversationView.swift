@@ -44,6 +44,8 @@ struct ConversationView: View {
     @State private var presets = AgentPresetCatalog()
     /// The reader is at the end of the timeline, so it follows new output (C-12).
     @State private var atBottom = true
+    /// 桌宠是否露出来，设置里的开关。
+    @AppStorage("dsh.pet.visible") private var petVisible = true
     @State private var showTurns = false
     @State private var timelineTop: CGFloat = 0
     /// What a timeline row opened. Up here, not on the row: a turn that closes folds its rows
@@ -222,7 +224,13 @@ struct ConversationView: View {
             .onChange(of: botTimeline?.room == true ? app.botTeam.relayRowCount : 0) { _, _ in if atBottom { scrollToBottom(proxy) } }
             .overlay(alignment: .bottomTrailing) {
                 // Animated here, not on the scroll view: its rows must not animate with the buttons.
-                ZStack {
+                ZStack(alignment: .bottomTrailing) {
+                    // 桌宠：站在输入框上方的右下角（dsh-Go 版式）。
+                    if !blank, petVisible {
+                        PetStage()
+                            .padding(.trailing, 10)
+                            .padding(.bottom, 2)
+                    }
                     if !atBottom && !blank {
                         VStack(spacing: 8) {
                             // The web's turn rail needs a wide window; here it is a list one tap away.
@@ -236,7 +244,7 @@ struct ConversationView: View {
                             }
                         }
                         .padding(.trailing, 16)
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 96)
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
                 }

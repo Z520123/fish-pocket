@@ -78,7 +78,12 @@ private struct BotTitle: View {
                 if let doing = team.doingText(bot.id) {
                     AILabelledSubtitle { Text(doing).font(.caption2).foregroundStyle(team.isWorking(bot.id) ? Palette.running : Palette.waiting) }
                 } else if !bot.role.isEmpty {
-                    AILabelledSubtitle { Text(bot.role).font(.caption2).foregroundStyle(Palette.secondary) }
+                    AILabelledSubtitle {
+                        HStack(spacing: 4) {
+                            Circle().fill(Palette.running).frame(width: 5, height: 5)
+                            Text(bot.role).font(.caption2).foregroundStyle(Palette.secondary)
+                        }
+                    }
                 } else {
                     AIContentLabel()
                 }

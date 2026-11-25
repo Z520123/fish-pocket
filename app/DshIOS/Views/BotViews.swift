@@ -120,19 +120,30 @@ struct BotDrawerEntry: View {
 
     var body: some View {
         let team = app.botTeam
+        let main = team.mainBot
         Button {
             Haptics.tap()
             team.openRequest = BotOpenRequest(route: nil)
         } label: {
-            HStack(spacing: 12) {
-                faces
-                Text("Bot").font(.subheadline).foregroundStyle(Palette.ink).layoutPriority(1)
+            HStack(spacing: 11) {
+                if let main {
+                    BotAvatar(bot: main, size: 40, live: true)
+                } else {
+                    Image("LaunchMark").resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle())
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(main?.name ?? String(localized: "Bot"))
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(main == nil ? String(localized: "打开 Bot 列表") : String(localized: "主 Bot · 本机在线"))
+                        .font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                }
+                .layoutPriority(1)
                 Spacer(minLength: 8)
                 status
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .frame(minHeight: 46)
+            .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
