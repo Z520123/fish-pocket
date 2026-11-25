@@ -46,6 +46,8 @@ struct ConversationView: View {
     @State private var atBottom = true
     /// 桌宠是否露出来，设置里的开关。
     @AppStorage("dsh.pet.visible") private var petVisible = true
+    /// 输入框下面那排 chips 里，模型那一项打开的选择页。
+    @State private var chipModelPicker = false
     @State private var showTurns = false
     @State private var timelineTop: CGFloat = 0
     /// What a timeline row opened. Up here, not on the row: a turn that closes folds its rows
@@ -158,6 +160,59 @@ struct ConversationView: View {
         }
     }
 
+    /// 输入框下面那排 chips：本机操控、账号余额、模型（设计稿里排一行）。
+    @ViewBuilder
+    private var composerChips: some View {
+        HStack(spacing: 5) {
+            Button {
+                Haptics.tap()
+                app.showToast(String(localized: "本机操控在「设置 → 操控手机」里"))
+            } label: {
+                chipLabel(String(localized: "本机操控"), icon: "iphone", dot: Palette.running)
+            }
+            .buttonStyle(.plain)
+            if app.fishPocket.signedIn {
+                Button {
+                    Haptics.tap()
+                    app.showToast(String(localized: "余额 \(app.fishPocket.balance ?? 0) 积分"))
+                } label: {
+                    chipLabel(String(localized: "账号余额"), value: app.fishPocket.balance.map { "\($0)" } ?? String(localized: "已登录"))
+                }
+                .buttonStyle(.plain)
+            }
+            Button {
+                Haptics.select()
+                chipModelPicker = true
+            } label: {
+                chipLabel(context.modelName(model), icon: "sparkles", value: context.effortName(model))
+            }
+            .buttonStyle(.plain)
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 1)
+        .padding(.leading, 2)
+        .sheet(isPresented: $chipModelPicker) { ModelSearchSheet(model: model, context: context) }
+    }
+
+    private func chipLabel(_ title: String, icon: String? = nil, value: String? = nil, dot: Color? = nil) -> some View {
+        HStack(spacing: 4) {
+            if let icon { Image(systemName: icon).font(.system(size: 10, weight: .semibold)) }
+            Text(title).font(.system(size: 10.5, weight: .semibold))
+            if let value, !value.isEmpty { Text(value).font(.system(size: 10.5)).foregroundStyle(Palette.secondary) }
+            if let dot { Circle().fill(dot).frame(width: 5, height: 5) }
+        }
+        .foregroundStyle(Palette.ink)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(Palette.control, in: Capsule())
+    }
+
+    /// 这个聊天对应的 Bot：群聊的会话不属于任何一只 Bot，就不显示进度。
+    private var workingBot: BotInfo? {
+        guard bot != nil else { return nil }
+        return app.botTeam.botOwning(sessionId)
+    }
+
     private func isBlank(_ model: SessionModel) -> Bool {
         bot == nil && model.subagentAddress == nil && model.loaded && !model.hasItems && model.live.isEmpty && !model.running
             && model.composer.bubbles.isEmpty
@@ -205,6 +260,15 @@ struct ConversationView: View {
             // even when the timeline is too short to scroll; so does a tap outside the composer.
             .scrollDismissesKeyboard(.immediately)
             .scrollBounceBehavior(.always)
+            // 干活进度浮在聊天中间：只读，不可点；输入时自动收起。
+            .overlay {
+                if !keyboardUp, let workingBot, let doing = app.botTeam.doingText(workingBot.id) {
+                    BotWorkingPill(name: workingBot.name, doing: doing)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: keyboardUp)
             // A moment later, not at once: the keyboard going moves the rows, and a link under the
             // finger would lose the tap; it opens first, and the keyboard goes after.
             .simultaneousGesture(TapGesture().onEnded {
@@ -309,6 +373,7 @@ struct ConversationView: View {
                         sheetUp: $inputSheetUp
                     )
                     .allowsHitTesting(presentedInteractionId(model) == nil)
+                    if !blank { composerChips }
                 }
             }
             .padding(.horizontal, 12)
@@ -2108,5 +2173,28 @@ struct AILabelledSubtitle<Lead: View>: View {
             Text(verbatim: "·").font(.caption2).foregroundStyle(Palette.secondary)
             AIContentLabel().fixedSize()
         }
+    }
+}
+
+/// 聊天中间那块「干活进度」：Bot 在干什么，只读、不可点，键盘弹起时由调用方收起。
+private struct BotWorkingPill: View {
+    let name: String
+    let doing: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ProgressView().controlSize(.mini)
+            Text("\(name) \(doing)")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.control.opacity(0.5)))
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        .accessibilityLabel(Text("\(name) \(doing)"))
+        .accessibilityAddTraits(.isStaticText)
     }
 }
