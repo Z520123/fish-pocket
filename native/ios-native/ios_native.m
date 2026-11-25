@@ -71,6 +71,10 @@ typedef struct {
 // write in the sense this policy is about.
 static const dsh_capability CAPABILITIES[] = {
   {"device",   dsh_native_device,   {"info", NULL}, NULL, {NULL}, false},
+  // Driving other apps needs no iOS permission to ask for — there is none — so
+  // the app's own switch is the only gate there can be. The execution layer
+  // still refuses without a mounted DDI; caps_phone.m says which of the two it is.
+  {"phone",    dsh_native_phone,    {"probe", NULL}, NULL, {NULL}, true},
   {"notify",   dsh_native_notify,   {"schedule", "cancel", "pending", NULL}, "notifications", {NULL}, false},
   {"calendar", dsh_native_calendar, {"list", "calendars", "create", "update", "delete", NULL}, "calendar",
    {"create", "update", "delete", NULL}, false},
