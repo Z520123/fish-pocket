@@ -290,7 +290,7 @@ targets:
         # (native/poki-launcher, built by the CI step before xcodegen runs). It is a bare
         # archive, not a target of its own, so it is linked by search path: an entry in
         # the dependencies list would have to be a target, framework or package.
-        OTHER_LDFLAGS: ["$(inherited)", "-L$(SRCROOT)/../vendor/poki-launcher", "-lpoki_launcher", "-lc++", "-lz", "-framework", "Security", "-framework", "CoreFoundation", "-framework", "IOKit"]
+        OTHER_LDFLAGS: ["$(inherited)", "-L$(SRCROOT)/../vendor/poki-launcher", "-lpoki_launcher", "-lc++", "-lz", "-framework", "Security", "-framework", "CoreFoundation", "-framework", "IOKit", "-Wl,-rpath,/System/Developer/usr/lib", "-Wl,-rpath,/System/Developer/Library/PrivateFrameworks"]
   # The engine's filesystem view (native/root): libc's path functions, and libSystem re-exported.
   DshRoot:
     type: framework
