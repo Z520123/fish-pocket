@@ -14,9 +14,11 @@ struct SettingsView: View {
     /// A page of the 探索 tab, pushed from its top row, rather than a sheet: that tab's navigation
     /// stack and back button, no ✕. The stack sets the settings look for it (`ExploreTabView`).
     var pushed = false
+    /// 从右边滑出来的面板：关它走这个，不是 sheet 自己的 dismiss。
+    var onClose: (() -> Void)?
 
     var body: some View {
-        if pushed { SettingsList(pushed: true) } else { SettingsSheet() }
+        if pushed { SettingsList(pushed: true) } else { SettingsSheet(onClose: onClose) }
     }
 }
 
@@ -39,9 +41,10 @@ extension SettingsView {
 /// 插件 and 自动化 never opened and the app had to be killed.
 private struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    var onClose: (() -> Void)?
 
     var body: some View {
-        NavigationStack { SettingsList(pushed: false).closeButton(dismiss) }
+        NavigationStack { SettingsList(pushed: false).closeButton(onClose ?? dismiss) }
             // 设置 and every page pushed or presented from it: the system's lists, not the monochrome ones.
             .settingsStyle()
     }

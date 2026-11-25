@@ -24,7 +24,7 @@ struct BotChatView: View {
                 accessory: AnyView(BotPending(bot: bot)),
                 menu: { model, tools in AnyView(BotChatMenu(target: .bot(bot.id), model: model, tools: tools)) },
                 tools: true
-            ))
+            ), hidesNavigationBar: true)
             .id(bot.sessionId)
             // 设计稿的主界面没有导航栏：头像、名字、在线状态直接浮在聊天顶上，头像点开抽屉。
             .toolbar(.hidden, for: .navigationBar)

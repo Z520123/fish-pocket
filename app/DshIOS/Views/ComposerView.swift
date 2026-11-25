@@ -264,6 +264,9 @@ struct ComposerView: View {
     private var composer: ComposerModel { model.composer }
     private var voice: VoiceInput { composer.voice }
 
+    /// 外面已经有圆角大框了：就不再给输入条自己铺一层底。
+    var showsSurface = true
+
     var body: some View {
         let trigger = activeTrigger
         VStack(alignment: .leading, spacing: 8) {
@@ -281,7 +284,7 @@ struct ComposerView: View {
                 // The bar turns at the touch; only letting go eases back.
                 .animation(voice.holding ? nil : .snappy(duration: 0.18), value: voice.phase)
                 .animation(.snappy(duration: 0.18), value: voice.cancelArmed)
-                .composerSurface()
+                .modifier(ComposerSurfaceIfNeeded(enabled: showsSurface))
         }
         .task(id: pendingDraft) {
             guard let pendingDraft else { return }
@@ -1075,5 +1078,15 @@ private extension View {
     /// The bar's buttons step aside while it is held: still there, so nothing moves.
     func holdHidden(_ hidden: Bool) -> some View {
         opacity(hidden ? 0 : 1).allowsHitTesting(!hidden)
+    }
+}
+
+
+/// 输入条的那层底：普通会话还是它自己铺，Bot 聊天交给外面的大框。
+private struct ComposerSurfaceIfNeeded: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled { content.composerSurface() } else { content }
     }
 }

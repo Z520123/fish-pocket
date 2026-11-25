@@ -556,7 +556,11 @@ struct MainView: View {
         shell
         // 打开 App 直接进大肥鱼的聊天（设计稿的主界面），团队还没拉回来时等一会儿。
         .task { await openMainBotOnLaunch() }
-        .sheet(item: $sheet) { page(of: $0).sheetNotices() }
+        .sheet(item: Binding(get: { sheet == .settings ? nil : sheet }, set: { sheet = $0 })) { page(of: $0).sheetNotices() }
+        // 设计稿的设置从右边滑出来，不是从底下弹。
+        .overlay(alignment: .trailing) {
+            if sheet == .settings { settingsPanel }
+        }
         .sheet(item: $onboarding, onDismiss: onboardingDismissed) { step in
             switch step {
             case .signIn(let ref, let autoStart):
@@ -739,7 +743,7 @@ struct MainView: View {
                 searchRequest += 1
             },
             toggleSidebar: toggleSidebar,
-            openSettings: { sheet = .settings }
+            openSettings: { withAnimation(.snappy(duration: 0.24)) { sheet = .settings } }
         )
     }
 
@@ -754,6 +758,28 @@ struct MainView: View {
             }
             try? await Task.sleep(for: .milliseconds(240))
         }
+    }
+
+    /// 从右边滑出来的设置面板，宽度够读，留一点背景露在外面。
+    private var settingsPanel: some View {
+        GeometryReader { geometry in
+            let width = min(430, geometry.size.width - 44)
+            ZStack(alignment: .leading) {
+                Palette.scrim
+                    .ignoresSafeArea()
+                    .onTapGesture { closeSettings() }
+                    .accessibilityLabel("关闭设置")
+                    .accessibilityAddTraits(.isButton)
+                SettingsView(onClose: closeSettings)
+                    .frame(width: width)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+        }
+        .transition(.move(edge: .trailing).combined(with: .opacity))
+    }
+
+    private func closeSettings() {
+        withAnimation(.snappy(duration: 0.24)) { sheet = nil }
     }
 
     private func toggleSidebar() {
@@ -885,7 +911,7 @@ struct MainView: View {
             pluginsSelected: storeOpen,
             select: { id in storeOpen = false; botOpen = false; selection = id; if usesTabs { showInTabs(id) }; setDrawer(false) },
             newConversation: { workspace in storeOpen = false; botOpen = false; workspaceId = workspace.id; newConversation(in: workspace); setDrawer(false) },
-            openSettings: { sheet = .settings },
+            openSettings: { withAnimation(.snappy(duration: 0.24)) { sheet = .settings } },
             openSchedules: { sheet = .schedules },
             openCordis: { sheet = .cordis },
             openSignIn: { sheet = .signIn },

@@ -13,6 +13,8 @@ struct ConversationView: View {
     var switchWorkspace: (Workspace) -> Void = { _ in }
     /// A Bot's chat or a group chat: its own title in the bar and its cards above the composer.
     var bot: BotChrome?
+    /// 设计稿的聊天页不要导航栏：顶上换成自己画的一行（`BotHeader`）。
+    var hidesNavigationBar = false
     @Environment(\.botTimeline) private var botTimeline
     /// The global automation page (the reminders sheet leads there).
     @Environment(AppModel.self) private var app
@@ -374,7 +376,9 @@ struct ConversationView: View {
                         consumeFocus: { app.pendingFocus.remove(sessionId) },
                         openLogExport: { headerSheet = .logExport },
                         focusChanged: { composerFocused = $0 },
-                        sheetUp: $inputSheetUp
+                        sheetUp: $inputSheetUp,
+                        // 外面的大框已经有了底，输入条别再铺一层白。
+                        showsSurface: !hidesNavigationBar
                     )
                     .allowsHitTesting(presentedInteractionId(model) == nil)
                     if !blank { composerChips(model) }
@@ -407,7 +411,7 @@ struct ConversationView: View {
         .conversationBar()
         // Stated, not left to the default: the workbench's files and changes hide the bar of
         // their own stacks, and without this closing the sheet takes this bar along.
-        .toolbar(.visible, for: .navigationBar)
+        .toolbar(hidesNavigationBar ? .hidden : .visible, for: .navigationBar)
         .toolbar {
             if let openDrawer = openDrawer ?? splitSidebar.toggle {
                 ToolbarItem(placement: .topBarLeading) { DrawerButton(action: openDrawer) }
