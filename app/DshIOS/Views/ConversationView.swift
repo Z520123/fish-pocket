@@ -290,7 +290,6 @@ struct ConversationView: View {
                     if !blank, petVisible {
                         PetStage()
                             .padding(.trailing, 10)
-                            .padding(.bottom, 2)
                     }
                     if !atBottom && !blank {
                         VStack(spacing: 8) {

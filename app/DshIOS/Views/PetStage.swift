@@ -52,12 +52,6 @@ struct PetStage: View {
                         .allowsHitTesting(false)
                 }
                 sprite(spec, k: k)
-                Text(store.usingBuiltin ? "小鲸鱼" : (store.current?.name ?? ""))
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(Palette.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: 78)
-                    .allowsHitTesting(false)
             }
             .fixedSize()
             .contentShape(Rectangle())
@@ -71,7 +65,7 @@ struct PetStage: View {
                     }
             )
             .onTapGesture { tap() }
-            .position(x: x, y: geo.size.height - h / 2 - 8)
+            .position(x: x, y: geo.size.height - h / 2)
         }
         .onReceive(clock) { _ in
             guard !reacting else { return }
