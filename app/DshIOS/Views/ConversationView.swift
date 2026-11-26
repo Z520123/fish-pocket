@@ -264,10 +264,11 @@ struct ConversationView: View {
             // even when the timeline is too short to scroll; so does a tap outside the composer.
             .scrollDismissesKeyboard(.immediately)
             .scrollBounceBehavior(.always)
-            // 干活进度浮在聊天中间：只读，不可点；输入时自动收起。
-            .overlay {
+            // 干活进度贴在输入框上面：只读，不可点；输入时自动收起。
+            .overlay(alignment: .bottom) {
                 if !keyboardUp, let workingBot, let doing = app.botTeam.doingText(workingBot.id) {
                     BotWorkingPill(name: workingBot.name, doing: doing)
+                        .padding(.bottom, 14)
                         .allowsHitTesting(false)
                         .transition(.opacity)
                 }
