@@ -359,7 +359,11 @@ final class LocationKeepAlive: NSObject, CLLocationManagerDelegate {
         running = on
         if on {
             if manager.authorizationStatus == .notDetermined {
-                manager.requestWhenInUseAuthorization()
+                // 定位保活要的是「始终允许」：只在「使用 App 期间」的话，息屏就断了。
+                manager.requestAlwaysAuthorization()
+            } else if manager.authorizationStatus == .authorizedWhenInUse {
+                // 已经给了「使用期间」：再要一次，系统会把它升成「始终允许」。
+                manager.requestAlwaysAuthorization()
             }
             manager.startUpdatingLocation()
         } else {
