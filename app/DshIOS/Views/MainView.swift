@@ -1305,6 +1305,10 @@ struct MainView: View {
             sheet = await balancePage()
         case .call:
             CallCenter.shared.expand()
+        case .pet(let action, let text, let seconds):
+            // 桌宠的动作不换页：`RootView` 已经在 `onOpenURL` 里交给 `PetBus` 了，
+            // 走到这里只说明窗口是冷启动，宠物那头也已经收到，不用再做什么。
+            _ = PetBus.shared.perform(action, text: text, seconds: seconds ?? 3)
         }
     }
 
