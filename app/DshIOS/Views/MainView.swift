@@ -1835,7 +1835,7 @@ private struct SettingsEdgePan: UIViewRepresentable {
             window?.rootViewController?.view.addGestureRecognizer(recognizer)
         }
 
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool { enabled }
+        override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool { enabled }
 
         @objc private func panned(_ recognizer: UIScreenEdgePanGestureRecognizer) {
             guard recognizer.state == .ended else { return }
