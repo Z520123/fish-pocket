@@ -556,6 +556,12 @@ struct MainView: View {
         shell
         // 打开 App 直接进大肥鱼的聊天（设计稿的主界面），团队还没拉回来时等一会儿。
         .task { await openMainBotOnLaunch() }
+        // 右边缘左滑开设置，设计稿的第二个入口。
+        .background {
+            SettingsEdgePan(enabled: sheet == nil) {
+                withAnimation(.snappy(duration: 0.24)) { sheet = .settings }
+            }
+        }
         .sheet(item: Binding(get: { sheet == .settings ? nil : sheet }, set: { sheet = $0 })) { page(of: $0).sheetNotices() }
         // 设计稿的设置从右边滑出来，不是从底下弹。
         .overlay(alignment: .trailing) {
@@ -764,7 +770,7 @@ struct MainView: View {
     private var settingsPanel: some View {
         GeometryReader { geometry in
             let width = min(430, geometry.size.width - 44)
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .trailing) {
                 Palette.scrim
                     .ignoresSafeArea()
                     .onTapGesture { closeSettings() }
@@ -1802,6 +1808,42 @@ private struct DrawerClosePan: UIViewRepresentable {
 
 /// A swipe from the screen's left edge, reported as it follows the finger. On the root view:
 /// sheets above it keep their own edges.
+/// 从右边缘往左滑：打开设置面板（设计稿的「左滑开设置」）。
+private struct SettingsEdgePan: UIViewRepresentable {
+    let enabled: Bool
+    let open: () -> Void
+
+    func makeUIView(context: Context) -> Catcher { Catcher() }
+
+    func updateUIView(_ view: Catcher, context: Context) {
+        view.enabled = enabled
+        view.open = open
+    }
+
+    final class Catcher: UIView, UIGestureRecognizerDelegate {
+        var enabled = true
+        var open: () -> Void = {}
+        private lazy var recognizer: UIScreenEdgePanGestureRecognizer = {
+            let recognizer = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(panned))
+            recognizer.edges = .right
+            recognizer.delegate = self
+            return recognizer
+        }()
+
+        override func didMoveToWindow() {
+            recognizer.view?.removeGestureRecognizer(recognizer)
+            window?.rootViewController?.view.addGestureRecognizer(recognizer)
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool { enabled }
+
+        @objc private func panned(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+            guard recognizer.state == .ended else { return }
+            if recognizer.translation(in: recognizer.view).x < -30 { open() }
+        }
+    }
+}
+
 private struct DrawerEdgePan: UIViewRepresentable {
     let enabled: Bool
     let changed: (CGFloat) -> Void
