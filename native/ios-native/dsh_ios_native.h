@@ -37,6 +37,9 @@ void dsh_native_contacts(NSString *op, NSDictionary *args, DshNativeReply reply)
 void dsh_native_compose(NSString *op, NSDictionary *args, DshNativeReply reply);
 void dsh_native_files(NSString *op, NSDictionary *args, DshNativeReply reply);
 void dsh_native_music(NSString *op, NSDictionary *args, DshNativeReply reply);
+/// The app's own mascot. It reaches no framework and no user data: the app's
+/// `PetBus` listens for the notification this posts and draws the pet.
+void dsh_native_pet(NSString *op, NSDictionary *args, DshNativeReply reply);
 
 /// The locale to ask a geocoder to answer `query` in, chosen by the script the
 /// query is written in.

@@ -85,6 +85,9 @@ static const dsh_capability CAPABILITIES[] = {
   // `open` leaves the app, so it reaches no user data of ours and needs no
   // permission — what it needs instead is a scheme allowlist, in caps_open.m.
   {"open",     dsh_native_open,     {"url", NULL}, NULL, {NULL}, false},
+  // The desk pet draws nothing here: it is the app's own view, reached through a
+  // notification (`caps_pet.m`). No framework, no user data, so nothing to gate.
+  {"pet",      dsh_native_pet,      {"react", NULL}, NULL, {NULL}, false},
   {"nlp",      dsh_native_nlp,      {"language", "entities", "similar", NULL}, NULL, {NULL}, false},
   // MapKit's search and directions are Apple's servers answering a query, not
   // the user's position — no permission, and "near me" stays a `location` question.

@@ -12,6 +12,9 @@ import Foundation
 /// - `fishpocket://bot/<id>`: that Bot's chat (Shortcuts).
 /// - `fishpocket://balance`: the page with the balance of the account in use (Shortcuts).
 /// - `fishpocket://call`: the voice call on now, full screen (its Live Activity opens it).
+/// - `fishpocket://pet?action=happy&text=好耶&seconds=3`: the desk pet does one thing. Its actions
+///   are `idle`, `thinking`, `working`, `happy`, `sleeping`, `alert`; a shortcut or a plugin can
+///   make it react without the agent in the middle.
 enum DshLink: Hashable {
     case session(String)
     case new(workspace: String? = nil, preset: String? = nil, draft: String? = nil)
@@ -21,6 +24,8 @@ enum DshLink: Hashable {
     case bot(String)
     case balance
     case call
+    /// 桌宠做一个动作：`action` 是状态名，`text` 是头顶那句话，`seconds` 是持续几秒。
+    case pet(action: String, text: String? = nil, seconds: Double? = nil)
 
     /// `DshURLScheme` in Info.plist (`DSH_URL_SCHEME` in project.yml): `fishpocket`, or a test
     /// build's own. Every link the app makes uses it.
@@ -61,6 +66,10 @@ enum DshLink: Hashable {
             self = .balance
         case "call":
             self = .call
+        case "pet":
+            let action = url.pathComponents.dropFirst().first ?? item("action")
+            guard let action, !action.isEmpty else { return nil }
+            self = .pet(action: action, text: item("text"), seconds: item("seconds").flatMap(Double.init))
         default:
             return nil
         }
@@ -93,6 +102,12 @@ enum DshLink: Hashable {
             components.host = "balance"
         case .call:
             components.host = "call"
+        case .pet(let action, let text, let seconds):
+            components.host = "pet"
+            var items = [URLQueryItem(name: "action", value: action)]
+            if let text { items.append(URLQueryItem(name: "text", value: text)) }
+            if let seconds { items.append(URLQueryItem(name: "seconds", value: String(seconds))) }
+            components.queryItems = items
         }
         return components.url!
     }

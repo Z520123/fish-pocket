@@ -13,7 +13,14 @@ struct PetStage: View {
     @AppStorage("dsh.pet.offsetX") private var storedX = 0.0
 
     @ObservedObject private var store = PetStore.shared
+    /// 外部（链接、快捷指令、智能体工具）要求做的动作。
+    @ObservedObject private var bus = PetBus.shared
 
+    /// 待机久了挪两步。
+    @State private var roaming = false
+    @State private var idleTicks = 0
+    /// 这一次待机走动的门槛，每回走完重掷。
+    @State private var roamAfter = Int.random(in: 140...380)
     /// 点一下的反应：内置那只和宠物包各存一份，类型不同。
     @State private var builtinReaction: PetAnimation?
     @State private var packReaction: PetAnim?
@@ -47,7 +54,7 @@ struct PetStage: View {
             let x = min(max(rightEdge + storedX + dragX, leftEdge), rightEdge)
 
             VStack(spacing: 2) {
-                if let bubble {
+                if let bubble = bus.text ?? bubble {
                     Text(bubble)
                         .font(.caption2)
                         .padding(.horizontal, 9)
@@ -73,8 +80,16 @@ struct PetStage: View {
             .position(x: x, y: geo.size.height - h / 2)
         }
         .onReceive(clock) { _ in
-            guard !reacting else { return }
+            // 反应动画也照常播帧：只显示第一帧的话，看着像卡住了。
             frame = (frame + 1) % max(currentSpec.anim.indexes.count, 1)
+            // 闲下来了就隔一阵挪两步：不动的话桌宠看着像张画。
+            let quiet = mood == .idle && bus.action == nil && builtinReaction == nil && packReaction == nil && !celebrating
+            if quiet, !roaming {
+                idleTicks += 1
+                if idleTicks >= roamAfter { roam() }
+            } else {
+                idleTicks = 0
+            }
         }
         .onReceive(bubbleTimer) { _ in
             if bubble != nil { bubble = nil }
@@ -102,7 +117,7 @@ struct PetStage: View {
             if let packReaction, let image = store.image(for: packReaction) {
                 return PetSpec(image: image, anim: packReaction)
             }
-            let key = mood.packKey
+            let key = (bus.action ?? mood).packKey
             let fallback = pack.animations["idle"] != nil ? "idle" : (pack.animations.keys.sorted().first ?? "idle")
             if let anim = pack.animations[key] ?? pack.animations[fallback], let image = store.image(for: anim) {
                 return PetSpec(image: image, anim: anim)
@@ -114,8 +129,14 @@ struct PetStage: View {
 
     /// 内置那只现在该播哪一段：反应 > 干完活的开心 > 状态本身。
     private var builtinAnimation: PetAnimation {
+        if let action = bus.action { return animation(for: action) }
         if let builtinReaction { return builtinReaction }
         if celebrating { return .happy }
+        if roaming { return .roamHop }
+        return animation(for: mood)
+    }
+
+    private func animation(for mood: PetMood) -> PetAnimation {
         switch mood {
         case .idle: return .idle
         case .thinking: return .thinking
@@ -123,6 +144,21 @@ struct PetStage: View {
         case .happy: return .happy
         case .sleeping: return .sleeping
         case .alert: return .notification
+        }
+    }
+
+    /// 待机久了跳两步：播 `roam-hop`，位置也挪一段，走完继续待机。
+    private func roam() {
+        idleTicks = 0
+        roamAfter = Int.random(in: 140...380)
+        roaming = true
+        let delta = Bool.random() ? CGFloat.random(in: 36...88) : -CGFloat.random(in: 36...88)
+        withAnimation(.easeInOut(duration: 0.9)) {
+            storedX = min(max(storedX + delta, -2000), 0)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.4))
+            roaming = false
         }
     }
 
@@ -228,6 +264,19 @@ struct PetAnimation {
 /// 桌宠现在该做什么，跟着智能体的状态走。
 enum PetMood: Equatable {
     case idle, thinking, working, happy, sleeping, alert
+
+    /// 按名字认一个：链接、快捷指令、智能体工具都用名字说话。
+    init?(named name: String) {
+        switch name.lowercased() {
+        case "idle", "待机": self = .idle
+        case "thinking", "思考": self = .thinking
+        case "working", "typing", "干活": self = .working
+        case "happy", "开心": self = .happy
+        case "sleeping", "睡觉": self = .sleeping
+        case "alert", "notification", "提醒": self = .alert
+        default: return nil
+        }
+    }
 
     /// 宠物包里对应的动画名，和 dsh-Go 的 `states` 一致。
     var packKey: String {

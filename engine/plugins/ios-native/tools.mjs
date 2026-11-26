@@ -2141,6 +2141,30 @@ const phoneStop = defineTool({
 
 // A tool is a definition, or a function of the registering context for the
 // few that need the engine itself.
+const pet = defineTool({
+  name: 'pet_react',
+  description:
+    '让 App 里的桌宠做一个动作，可以顺带让它在头顶说一句很短的话。它只是界面上的反应，不改变'
+    + '任何东西，也不能代替回答。用户提到宠物、让你「让宠物…」、或者一段活干完想表示一下时用它。',
+  parameters: {
+    action: {
+      type: 'string',
+      enum: ['idle', 'thinking', 'working', 'happy', 'sleeping', 'alert'],
+      description: 'idle 待机、thinking 思考、working 干活、happy 开心、sleeping 睡觉、alert 提醒',
+      required: true,
+    },
+    text: { type: 'string', description: '宠物头顶气泡里的一句话，很短，可省' },
+    seconds: { type: 'number', description: '这个动作保持几秒，默认 3，最多 30' },
+  },
+  output: {
+    schema: { type: 'json' },
+    render: (args, value) => text(value?.ok
+      ? `桌宠做了一次 ${value.action ?? args.action}${args.text ? `，气泡：${args.text}` : ''}`
+      : '桌宠没有反应：动作名不认识'),
+  },
+  execute: (args) => invoke('pet', 'react', { action: args.action, text: args.text, seconds: args.seconds }),
+});
+
 export const TOOLS = {
   device: device,
   notify: notify,
@@ -2173,4 +2197,5 @@ export const TOOLS = {
   phonePress: phonePress,
   phoneApp: phoneApp,
   phoneStop: phoneStop,
+  pet: pet,
 };

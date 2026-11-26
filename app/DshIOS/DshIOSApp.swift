@@ -101,6 +101,11 @@ struct RootView: View {
             .onOpenURL { url in
                 // The call's own link brings its screen back over whatever is open.
                 if DshLink(url: url) == .call { CallCenter.shared.expand(); return }
+                // 桌宠：链接、快捷指令、插件都能让它做个动作，不用等智能体。
+                if case .pet(let action, let text, let seconds) = DshLink(url: url) {
+                    PetBus.shared.perform(action, text: text, seconds: seconds ?? 3)
+                    return
+                }
                 if let parsed = DshLink(url: url) { follow(LinkRequest(link: parsed)) }
             }
             .onChange(of: inbox.request?.token, initial: true) {
