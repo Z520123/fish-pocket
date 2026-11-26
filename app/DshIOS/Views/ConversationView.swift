@@ -180,21 +180,13 @@ struct ConversationView: View {
                 chipLabel(String(localized: "本机操控"), icon: "iphone", dot: Palette.running)
             }
             .buttonStyle(.plain)
-            // 余额一直露着：没登录也显示「未登录」，点了给出去哪儿登录，不然这排少一枚看不出原因。
+            // 余额一直露着：优先 DeepSeek 账号的钱包，其次 Fish Pocket 的积分，都没登录就说未登录。
             Button {
                 Haptics.tap()
-                if app.fishPocket.signedIn {
-                    app.showToast(String(localized: "余额 \(app.fishPocket.balance ?? 0) 积分"))
-                } else {
-                    app.showToast(String(localized: "还没登录 Fish Pocket 账号，去「设置 → Fish Pocket 账号」登录就有了"))
-                }
+                app.showToast(balanceSummary)
             } label: {
-                chipLabel(
-                    String(localized: "账号余额"),
-                    value: app.fishPocket.signedIn
-                        ? (app.fishPocket.balance.map { "\($0)" } ?? String(localized: "已登录"))
-                        : String(localized: "未登录")
-                )
+                chipLabel(String(localized: "账号余额"), value: balanceChip)
+                    .lineLimit(1)
             }
             .buttonStyle(.plain)
             Button {
@@ -224,6 +216,34 @@ struct ConversationView: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .background(Palette.control, in: Capsule())
+    }
+
+    /// chips 上那一小截余额：能短就短，太长的那排会挤。
+    private var balanceChip: String {
+        if let wallets = app.account.wallets, !wallets.isEmpty {
+            let first = wallets[0]
+            let text = formatBalance(first["balance"].string ?? "0", currency: first["currency"].string)
+            return wallets.count > 1 ? "\(text)+" : text
+        }
+        if app.fishPocket.signedIn {
+            return app.fishPocket.balance.map { "\($0)" } ?? String(localized: "已登录")
+        }
+        return (app.account.signedIn || app.fishPocket.signedIn) ? String(localized: "已登录") : String(localized: "未登录")
+    }
+
+    /// 点余额那一枚时的说明：说清是哪边的钱、还剩多少。
+    private var balanceSummary: String {
+        if let wallets = app.account.wallets, !wallets.isEmpty {
+            let money = wallets.map { formatBalance($0["balance"].string ?? "0", currency: $0["currency"].string) }.joined(separator: " + ")
+            return String(localized: "DeepSeek 账号余额 \(money)")
+        }
+        if app.fishPocket.signedIn {
+            return String(localized: "Fish Pocket 积分 \(app.fishPocket.balance ?? 0)")
+        }
+        if app.account.signedIn {
+            return String(localized: "余额还没读出来，下拉设置页刷新一下")
+        }
+        return String(localized: "还没登录账号，去「设置 → 账号」登录 DeepSeek 账号就显示余额了")
     }
 
     /// 桌宠该做什么：Bot 聊天看这只 Bot 在干嘛，普通会话看这一轮跑没跑。
