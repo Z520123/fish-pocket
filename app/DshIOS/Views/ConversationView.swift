@@ -264,15 +264,7 @@ struct ConversationView: View {
             // even when the timeline is too short to scroll; so does a tap outside the composer.
             .scrollDismissesKeyboard(.immediately)
             .scrollBounceBehavior(.always)
-            // 干活进度贴在输入框上面：只读，不可点；输入时自动收起。
-            .overlay(alignment: .bottom) {
-                if !keyboardUp, let workingBot, let doing = app.botTeam.doingText(workingBot.id) {
-                    BotWorkingPill(name: workingBot.name, doing: doing)
-                        .padding(.bottom, 14)
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-            }
+
             .animation(.easeOut(duration: 0.18), value: keyboardUp)
             // A moment later, not at once: the keyboard going moves the rows, and a link under the
             // finger would lose the tap; it opens first, and the keyboard goes after.
@@ -364,8 +356,16 @@ struct ConversationView: View {
                 if let notice = model.subagentReadOnly(parentAvailable: parentAvailable(model)) {
                     SubagentReadOnlyNotice(title: notice.title, detail: notice.detail)
                 } else {
-                    // 设计稿：输入框和下面三个 chips 装在同一个圆角大框里。
+                    // 设计稿：输入框和下面三个 chips 装在同一个圆角大框里；
+                    // 干活进度也在这个框里，居中显示，一输入就收起。
                     VStack(alignment: .leading, spacing: 0) {
+                    if !keyboardUp, let workingBot, let doing = app.botTeam.doingText(workingBot.id) {
+                        BotWorkingPill(name: workingBot.name, doing: doing)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 9)
+                            .padding(.bottom, 3)
+                            .allowsHitTesting(false)
+                    }
                     ComposerView(
                         model: model, context: context, pendingDraft: app.pendingDrafts[sessionId],
                         consumeDraft: { app.pendingDrafts[sessionId] = nil },
