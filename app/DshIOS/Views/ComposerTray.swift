@@ -13,6 +13,9 @@ struct ComposerTray: View {
     let files: () -> Void
     let pick: (Candidate) -> Void
     let setPermission: (String) -> Void
+    /// In a popover (a wide window), which takes its height from the tray: the first page's rows
+    /// for a Bot's or a group's, room for a page of the tray otherwise.
+    var popover = false
     /// A Bot's chat or a group chat: the model and modes are not this session's to set.
     @Environment(\.botComposer) private var bot
     @Environment(AppModel.self) private var app
@@ -20,8 +23,35 @@ struct ComposerTray: View {
     @State private var confirmingPermission: String?
     @State private var confirmingTeamOff = false
     @State private var showingConnectors = false
+    /// How tall the first page's rows are (`FittedTrayHeight`), from iOS 18.
+    @State private var contentHeight: CGFloat?
+    /// At full height: dragged there, or a page of the tray pushed.
+    @State private var expanded = false
 
     private var composer: ComposerModel { model.composer }
+
+    /// A Bot's or a group's tray is a few rows, not the half screen an ordinary conversation's
+    /// fills: the sheet is as tall as they are, rather than ending in an empty half.
+    private var fitted: PresentationDetent? {
+        guard bot != nil, let contentHeight else { return nil }
+        return .height(contentHeight)
+    }
+
+    private var popoverHeight: CGFloat? {
+        guard popover else { return nil }
+        if !expanded, bot != nil, let contentHeight { return contentHeight }
+        return 520
+    }
+
+    private var detent: Binding<PresentationDetent> {
+        Binding(get: { expanded ? .large : fitted ?? .medium }, set: { expanded = $0 == .large })
+    }
+
+    /// The pages the tray leads to are lists of their own: a sheet sized to the first page's
+    /// rows opens to full height for them.
+    private func expandsFitted(_ page: some View) -> some View {
+        page.onAppear { if fitted != nil { expanded = true } }
+    }
 
     var body: some View {
         NavigationStack {
@@ -44,7 +74,7 @@ struct ComposerTray: View {
                 if bot == nil { modelSettings }
                 Section {
                     NavigationLink {
-                        CandidateList(model: model, context: context, trigger: "@", pick: pick)
+                        expandsFitted(CandidateList(model: model, context: context, trigger: "@", pick: pick))
                     } label: {
                         Label(bot == nil ? "引用文件或对话" : "提到 Bot、文件或对话", systemImage: "at")
                     }
@@ -80,9 +110,11 @@ struct ComposerTray: View {
                 if bot == nil { sessionModes }
             }
             .groupedList()
+            .modifier(FittedTrayHeight(height: $contentHeight))
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $showingConnectors) { BotConnectorsPage().settingsStyle() }
+            .navigationDestination(isPresented: $showingConnectors) { expandsFitted(BotConnectorsPage().settingsStyle()) }
         }
+        .frame(height: popoverHeight)
         .inkTint()
         .permissionConfirmation($confirmingPermission, confirm: setPermission)
         .alert("确认停用智能体团队协作？", isPresented: $confirmingTeamOff) {
@@ -91,7 +123,7 @@ struct ComposerTray: View {
         } message: {
             Text("停用后，共享任务工具和团队协调指令不再提供给智能体。这可能影响缓存复用、增加后续的 token 用量，并影响当前任务的协作效果。")
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([fitted ?? .medium, .large], selection: detent)
         .presentationDragIndicator(.visible)
         .sheetNotices()
     }
@@ -175,6 +207,24 @@ struct ComposerTray: View {
             confirmingPermission = value
         } else {
             setPermission(value)
+        }
+    }
+}
+
+/// The height the tray's first page needs to show all its rows, insets included: from iOS 18,
+/// which reports a list's scroll geometry. Before it, the tray keeps the half-screen sheet.
+private struct FittedTrayHeight: ViewModifier {
+    @Binding var height: CGFloat?
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                (geometry.contentSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom).rounded(.up)
+            } action: { _, new in
+                if new > 0 { height = new }
+            }
+        } else {
+            content
         }
     }
 }
