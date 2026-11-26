@@ -5,6 +5,8 @@ import SwiftUI
 /// 内置的是 dsh-Go 的 Deepy 小鲸鱼（图集在 bundle 根目录，数据写死）；
 /// 装了宠物包以后改读 `pack.json`，图和帧表都用包里的。
 struct PetStage: View {
+    /// 现在该做什么：跟着智能体的状态换动作，不是一直待机。
+    var mood: PetMood = .idle
     /// 美术像素到点的倍率，三档大小。
     @AppStorage("dsh.pet.size") private var sizeRaw = 1
     /// 相对右边缘向左挪了多少点，拖动后记住。
@@ -12,8 +14,11 @@ struct PetStage: View {
 
     @ObservedObject private var store = PetStore.shared
 
-    @State private var builtin = PetAnimation.idle
-    @State private var reaction: PetAnim?
+    /// 点一下的反应：内置那只和宠物包各存一份，类型不同。
+    @State private var builtinReaction: PetAnimation?
+    @State private var packReaction: PetAnim?
+    /// 一段活干完先乐一会儿。
+    @State private var celebrating = false
     @State private var frame = 0
     @State private var reacting = false
     @State private var bubble: String?
@@ -74,22 +79,51 @@ struct PetStage: View {
         .onReceive(bubbleTimer) { _ in
             if bubble != nil { bubble = nil }
         }
+        // 换动作从头播，不然会从上一段的中途接着走。
+        .onChange(of: mood) { old, new in
+            frame = 0
+            // 刚干完活：先乐一会儿再回待机。
+            if (old == .working || old == .thinking), new == .idle {
+                celebrating = true
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(3))
+                    celebrating = false
+                    frame = 0
+                }
+            }
+        }
         .accessibilityLabel(Text("桌宠"))
         .accessibilityHint(Text("点一下有反应，可以左右拖"))
     }
 
-    /// 现在该画哪一只：反应动画 > 宠物包 > 内置待机。
+    /// 现在该画哪一只：点一下的反应 > 宠物包 > 内置，按当前状态取动作。
     private var currentSpec: PetSpec {
         if !store.usingBuiltin, let pack = store.current {
-            if let reaction, let image = store.image(for: reaction) {
-                return PetSpec(image: image, anim: reaction)
+            if let packReaction, let image = store.image(for: packReaction) {
+                return PetSpec(image: image, anim: packReaction)
             }
-            let key = pack.animations["idle"] != nil ? "idle" : (pack.animations.keys.sorted().first ?? "idle")
-            if let anim = pack.animations[key], let image = store.image(for: anim) {
+            let key = mood.packKey
+            let fallback = pack.animations["idle"] != nil ? "idle" : (pack.animations.keys.sorted().first ?? "idle")
+            if let anim = pack.animations[key] ?? pack.animations[fallback], let image = store.image(for: anim) {
                 return PetSpec(image: image, anim: anim)
             }
         }
+        let builtin = builtinAnimation
         return PetSpec(image: builtin.image(), anim: builtin.anim)
+    }
+
+    /// 内置那只现在该播哪一段：反应 > 干完活的开心 > 状态本身。
+    private var builtinAnimation: PetAnimation {
+        if let builtinReaction { return builtinReaction }
+        if celebrating { return .happy }
+        switch mood {
+        case .idle: return .idle
+        case .thinking: return .thinking
+        case .working: return .typing
+        case .happy: return .happy
+        case .sleeping: return .sleeping
+        case .alert: return .notification
+        }
     }
 
     /// 一张图集按格切：整张图缩到「每格 = box 的大小」，再平移到当前格，外面裁一个 box 大的窗口。
@@ -127,15 +161,15 @@ struct PetStage: View {
         if !store.usingBuiltin, let pack = store.current,
            let left = pack.animations["react-left"] ?? pack.animations["idle"],
            let right = pack.animations["react-right"] ?? pack.animations["idle"] {
-            reaction = Bool.random() ? left : right
+            packReaction = Bool.random() ? left : right
         } else {
-            builtin = Bool.random() ? .reactLeft : .reactRight
+            builtinReaction = Bool.random() ? .reactLeft : .reactRight
         }
         bubble = ["在的", "戳我干嘛", "要干活吗", "好耶"].randomElement()
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.4))
-            reaction = nil
-            builtin = .idle
+            builtinReaction = nil
+            packReaction = nil
             frame = 0
             reacting = false
         }
@@ -148,31 +182,33 @@ private struct PetSpec {
     let anim: PetAnim
 }
 
-/// 内置那只的数据：图集在 bundle 根目录，帧表照 dsh-Go 的 pack.json 写死。
+/// 内置那只的数据：图集在 bundle 根目录，帧表照 dsh-Go 的 `pack.json` 写死。
 struct PetAnimation {
     let sheet: String
     let anim: PetAnim
 
-    static let idle = builtin("pet-deepy-idle", cols: 21, count: 42, box: CGRect(x: 12, y: 26, width: 36, height: 24))
-    static let thinking = builtin("pet-deepy-thinking", cols: 16, count: 48, box: CGRect(x: 0, y: 6, width: 47, height: 44))
-    static let working = builtin("pet-deepy-typing", cols: 12, count: 48, box: CGRect(x: 0, y: 17, width: 52, height: 33))
-    static let happy = builtin("pet-deepy-happy", cols: 13, count: 52, box: CGRect(x: 0, y: 5, width: 52, height: 45))
-    static let sleeping = builtin("pet-deepy-sleeping", cols: 16, count: 64, box: CGRect(x: 2, y: 2, width: 44, height: 48))
-    static let reactLeft = builtin("pet-deepy-react-left", cols: 14, count: 40, box: CGRect(x: 1, y: 16, width: 50, height: 34))
-    static let reactRight = builtin("pet-deepy-react-right", cols: 14, count: 40, box: CGRect(x: 8, y: 16, width: 44, height: 34))
+    static let idle = builtin("pet-deepy-idle", cols: 21, count: 48, box: CGRect(x: 12, y: 26, width: 36, height: 24), frame: CGSize(width: 180, height: 120))
+    static let thinking = builtin("pet-deepy-thinking", cols: 16, count: 48, box: CGRect(x: 0, y: 6, width: 47, height: 44), frame: CGSize(width: 235, height: 220))
+    static let typing = builtin("pet-deepy-typing", cols: 12, count: 48, box: CGRect(x: 0, y: 17, width: 52, height: 33), frame: CGSize(width: 260, height: 165))
+    static let happy = builtin("pet-deepy-happy", cols: 13, count: 52, box: CGRect(x: 0, y: 5, width: 52, height: 45), frame: CGSize(width: 260, height: 225))
+    static let sleeping = builtin("pet-deepy-sleeping", cols: 16, count: 64, box: CGRect(x: 2, y: 2, width: 44, height: 48), frame: CGSize(width: 220, height: 240))
+    static let waking = builtin("pet-deepy-waking", cols: 15, count: 30, box: CGRect(x: 8, y: 4, width: 44, height: 46), frame: CGSize(width: 220, height: 230))
+    static let roamHop = builtin("pet-deepy-roam-hop", cols: 13, count: 24, box: CGRect(x: 10, y: 20, width: 37, height: 30), frame: CGSize(width: 185, height: 150))
+    static let reactLeft = builtin("pet-deepy-react-left", cols: 14, count: 40, box: CGRect(x: 1, y: 16, width: 50, height: 34), frame: CGSize(width: 250, height: 170))
+    static let reactRight = builtin("pet-deepy-react-right", cols: 14, count: 40, box: CGRect(x: 8, y: 16, width: 44, height: 34), frame: CGSize(width: 220, height: 170))
+    static let notification = builtin("pet-deepy-notification", cols: 16, count: 32, box: CGRect(x: 3, y: 7, width: 47, height: 43), frame: CGSize(width: 235, height: 215))
 
-    private static func builtin(_ sheet: String, cols: Int, count: Int, box: CGRect) -> PetAnimation {
+    private static func builtin(_ sheet: String, cols: Int, count: Int, box: CGRect, frame: CGSize) -> PetAnimation {
         PetAnimation(
             sheet: sheet,
             anim: PetAnim(
                 sheet: Bundle.main.url(forResource: sheet, withExtension: "png") ?? URL(fileURLWithPath: "/"),
-                // dsh-Go 的图集一格是 180×120 像素，box 用 canvas 单位写的。
-                frameW: 180,
-                frameH: 120,
+                frameW: frame.width,
+                frameH: frame.height,
                 cols: cols,
                 box: box,
                 indexes: Array(0..<count),
-                fps: 10
+                fps: 20
             )
         )
     }
@@ -186,5 +222,22 @@ struct PetAnimation {
               let image = UIImage(contentsOfFile: url.path) else { return nil }
         Self.images.setObject(image, forKey: sheet as NSString)
         return image
+    }
+}
+
+/// 桌宠现在该做什么，跟着智能体的状态走。
+enum PetMood: Equatable {
+    case idle, thinking, working, happy, sleeping, alert
+
+    /// 宠物包里对应的动画名，和 dsh-Go 的 `states` 一致。
+    var packKey: String {
+        switch self {
+        case .idle: return "idle"
+        case .thinking: return "thinking"
+        case .working: return "typing"
+        case .happy: return "happy"
+        case .sleeping: return "sleeping"
+        case .alert: return "notification"
+        }
     }
 }

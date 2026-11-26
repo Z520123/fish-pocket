@@ -28,7 +28,7 @@ struct BotAvatar: View {
         let mood = mood ?? (live ? bot.map { team.mood($0.id) } : nil) ?? .idle
         Group {
             if let bot, team.usesAppMark(bot) {
-                picture(Image("LaunchMark"), mood: mood)
+                picture(BotPicture.appMark, mood: mood)
             } else if let data = bot?.avatarImage, let image = BotPicture.image(data) {
                 picture(Image(uiImage: image), mood: mood)
             } else if let bot {
@@ -54,8 +54,28 @@ struct BotAvatar: View {
     }
 }
 
+/// App 自己的标记：bundle 里的鲸鱼娘（`pet-avatar.png`），换不成就退回老的 LaunchMark。
+struct AppMark: View {
+    var size: CGFloat
+
+    var body: some View {
+        BotPicture.appMark
+            .resizable()
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+    }
+}
+
 /// A Bot's own picture: a `data:image/…;base64,` URL, decoded once.
 enum BotPicture {
+    /// 鲸鱼娘那张，解码一次留着；bundle 里没有就退回 LaunchMark。
+    static let appMark: Image = {
+        guard let url = Bundle.main.url(forResource: "pet-avatar", withExtension: "png"),
+              let image = UIImage(contentsOfFile: url.path) else { return Image("LaunchMark") }
+        return Image(uiImage: image)
+    }()
     private static let cache = NSCache<NSString, UIImage>()
 
     static func image(_ dataURL: String) -> UIImage? {
@@ -129,7 +149,7 @@ struct BotDrawerEntry: View {
                 if let main {
                     BotAvatar(bot: main, size: 40, live: true)
                 } else {
-                    Image("LaunchMark").resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle())
+                    AppMark(size: 40)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(main?.name ?? String(localized: "Bot"))
@@ -166,7 +186,7 @@ struct BotDrawerEntry: View {
         let shown = ([main].compactMap { $0 } + others)
         return HStack(spacing: -20) {
             if shown.isEmpty {
-                Image("LaunchMark").resizable().scaledToFill().frame(width: 56, height: 56).clipShape(Circle())
+                AppMark(size: 56)
             }
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, bot in
                 BotAvatar(bot: bot, size: 56, live: true, outline: Palette.background)
@@ -663,8 +683,8 @@ struct BotSetupView: View {
             VStack(spacing: 28) {
                 HStack(spacing: -14) {
                     BotMark(character: BotCharacter.named("star")!, color: BotInk.color("blue")!, size: 64, lively: true, seed: "star")
-                    Image("LaunchMark").resizable().scaledToFill().frame(width: 80, height: 80).clipShape(Circle())
-                        .overlay(Circle().stroke(Palette.background, lineWidth: 4)).zIndex(1).accessibilityHidden(true)
+                    AppMark(size: 80)
+                        .overlay(Circle().stroke(Palette.background, lineWidth: 4)).zIndex(1)
                     BotMark(character: BotCharacter.named("kitty")!, color: BotInk.color("orange")!, size: 64, lively: true, seed: "kitty")
                 }
                 .padding(.top, 32)

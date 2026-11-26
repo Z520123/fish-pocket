@@ -13,6 +13,9 @@ struct BotChatView: View {
     /// Held here, not `.constant`: a constant binding reads as changed on every pass, and the
     /// conversation view redraws without end. A session it picks (a reminder's) opens outside.
     @State private var selection: String?
+    /// 会话模型备好后从这里过一手：顶上那行的菜单要它。
+    @State private var chatModel: SessionModel?
+    @State private var chatTools: BotChatTools?
 
     var body: some View {
         let team = app.botTeam
@@ -24,12 +27,15 @@ struct BotChatView: View {
                 accessory: AnyView(BotPending(bot: bot)),
                 menu: { model, tools in AnyView(BotChatMenu(target: .bot(bot.id), model: model, tools: tools)) },
                 tools: true
-            ), hidesNavigationBar: true)
+            ), hidesNavigationBar: true, onReady: { model, tools in
+                chatModel = model
+                chatTools = tools
+            })
             .id(bot.sessionId)
             // 设计稿的主界面没有导航栏：头像、名字、在线状态直接浮在聊天顶上，头像点开抽屉。
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
-                BotHeader(bot: bot, openDrawer: openDrawer) { detailOpen = true }
+                BotHeader(bot: bot, openDrawer: openDrawer, chatModel: chatModel, chatTools: chatTools) { detailOpen = true }
             }
             .environment(\.botTimeline, BotTimeline(hiddenTurns: team.hiddenTurns(of: bot), earlierFrom: bot.parts.isEmpty ? nil : bot.sessionId, showsThinking: team.showsThinking, sessionId: bot.sessionId))
             .environment(\.botComposer, .bot(bot.id))
@@ -76,6 +82,9 @@ private struct BotHeader: View {
     @Environment(AppModel.self) private var app
     let bot: BotInfo
     var openDrawer: (() -> Void)?
+    /// 这个聊天的会话与工具：右边那个「⋯」要它们才能导出、复制、开工作台。
+    var chatModel: SessionModel?
+    var chatTools: BotChatTools?
     var openDetail: () -> Void
 
     var body: some View {
@@ -108,6 +117,15 @@ private struct BotHeader: View {
             .buttonStyle(.plain)
             .accessibilityHint(Text("查看 Bot 详情"))
             Spacer(minLength: 0)
+            // 设计稿不要右上角那三条：这一枚是聊天自己的菜单（工作台、浏览器、旁支提问、导出…）。
+            if let chatModel {
+                BotChatMenu(target: .bot(bot.id), model: chatModel, tools: chatTools)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Palette.secondary)
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(Text("更多操作"))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 2)

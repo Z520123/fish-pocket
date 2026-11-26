@@ -15,6 +15,8 @@ struct ConversationView: View {
     var bot: BotChrome?
     /// 设计稿的聊天页不要导航栏：顶上换成自己画的一行（`BotHeader`）。
     var hidesNavigationBar = false
+    /// 会话模型备好时交给外面：聊天页那一行要它来导出、复制整段对话。
+    var onReady: ((SessionModel, BotChatTools) -> Void)?
     @Environment(\.botTimeline) private var botTimeline
     /// The global automation page (the reminders sheet leads there).
     @Environment(AppModel.self) private var app
@@ -97,6 +99,11 @@ struct ConversationView: View {
             await context.load(session)
         }
         .task(id: "\(sessionId)-\(app.generation)") { await jobs.follow(sessionId: sessionId, app: app) }
+        // 顶部那行的菜单要这个会话的 model：备好了就交出去。
+        .onChange(of: model == nil, initial: true) { _, empty in
+            guard !empty, let model else { return }
+            onReady?(model, BotChatTools(toggleWorkbench: { toggleWorkbench() }, openBrowser: openBrowser))
+        }
         .task(id: app.generation) { await presets.load(app.client) }
         .onDisappear {
             guard model != nil else { return }
@@ -173,15 +180,23 @@ struct ConversationView: View {
                 chipLabel(String(localized: "本机操控"), icon: "iphone", dot: Palette.running)
             }
             .buttonStyle(.plain)
-            if app.fishPocket.signedIn {
-                Button {
-                    Haptics.tap()
+            // 余额一直露着：没登录也显示「未登录」，点了给出去哪儿登录，不然这排少一枚看不出原因。
+            Button {
+                Haptics.tap()
+                if app.fishPocket.signedIn {
                     app.showToast(String(localized: "余额 \(app.fishPocket.balance ?? 0) 积分"))
-                } label: {
-                    chipLabel(String(localized: "账号余额"), value: app.fishPocket.balance.map { "\($0)" } ?? String(localized: "已登录"))
+                } else {
+                    app.showToast(String(localized: "还没登录 Fish Pocket 账号，去「设置 → Fish Pocket 账号」登录就有了"))
                 }
-                .buttonStyle(.plain)
+            } label: {
+                chipLabel(
+                    String(localized: "账号余额"),
+                    value: app.fishPocket.signedIn
+                        ? (app.fishPocket.balance.map { "\($0)" } ?? String(localized: "已登录"))
+                        : String(localized: "未登录")
+                )
             }
+            .buttonStyle(.plain)
             Button {
                 Haptics.select()
                 chipModelPicker = true
@@ -209,6 +224,23 @@ struct ConversationView: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .background(Palette.control, in: Capsule())
+    }
+
+    /// 桌宠该做什么：Bot 聊天看这只 Bot 在干嘛，普通会话看这一轮跑没跑。
+    private func petMood(_ model: SessionModel) -> PetMood {
+        guard bot != nil, let botInfo = app.botTeam.botOwning(sessionId) else {
+            return model.running ? .working : .idle
+        }
+        switch app.botTeam.mood(botInfo.id) {
+        case .idle:
+            return model.running ? .working : .idle
+        case .thinking, .searching, .waiting:
+            return .thinking
+        case .working, .sending:
+            return .working
+        case .alert:
+            return .alert
+        }
     }
 
     /// 这个聊天对应的 Bot：群聊的会话不属于任何一只 Bot，就不显示进度。
@@ -288,7 +320,7 @@ struct ConversationView: View {
                 ZStack(alignment: .bottomTrailing) {
                     // 桌宠：站在输入框上方的右下角（dsh-Go 版式）。
                     if !blank, petVisible {
-                        PetStage()
+                        PetStage(mood: petMood(model))
                             .padding(.trailing, 10)
                     }
                     if !atBottom && !blank {
