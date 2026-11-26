@@ -16,18 +16,29 @@ struct PhoneControlView: View {
     private var paired: Bool { state["paired"] as? Bool ?? false }
     private var imagePresent: Bool { state["ddi"] as? Bool ?? false }
     private var keepAlive: Bool { state["locationKeepAlive"] as? Bool ?? false }
+    /// 本机操控的总开关（phone 这项能力由 App 自己把门，iOS 没授权可问）。
+    @State private var enabled = false
 
     var body: some View {
         List {
             Section {
-                LabeledContent {
+                // 这一枚就是「本机操控」的总开关：关掉以后 phone 那套工具一个都调不动。
+                Toggle(isOn: Binding(
+                    get: { enabled },
+                    set: { on in
+                        DshNativeSetCapabilityEnabled("phone", on)
+                        enabled = on
+                        refresh()
+                    }
+                )) {
+                    Label("本机操控", systemImage: "iphone.gen3")
+                }
+                LabeledContent("状态") {
                     HStack(spacing: 6) {
                         Circle().fill(tint).frame(width: 8, height: 8)
-                        Text(title)
+                        Text(enabled ? title : String(localized: "已关闭"))
                     }
                     .foregroundStyle(.secondary)
-                } label: {
-                    Label("本机操控", systemImage: "iphone.gen3")
                 }
                 if !detail.isEmpty {
                     Text(detail).font(.footnote).foregroundStyle(.secondary)
@@ -106,7 +117,7 @@ struct PhoneControlView: View {
                 } label: {
                     Label("测试会话", systemImage: "waveform.path.ecg")
                 }
-                .disabled(busy)
+                .disabled(busy || !enabled)
             } footer: {
                 Text("只开一次自动化会话，什么都不点。第一次会弹 iOS 的授权，允许一次即可。")
             }
@@ -147,7 +158,10 @@ struct PhoneControlView: View {
         .onReceive(NotificationCenter.default.publisher(for: PhoneLink.stateChanged)) { _ in refresh() }
     }
 
-    private func refresh() { state = PhoneLink.shared.stateJSON() }
+    private func refresh() {
+        state = PhoneLink.shared.stateJSON()
+        enabled = DshNativeCapabilityEnabled("phone")
+    }
 
     private var title: String {
         switch stage {

@@ -427,6 +427,7 @@ struct NativeCapability: Identifiable {
     var title: String {
         switch id {
         case "device": return String(localized: "设备状态")
+        case "phone": return String(localized: "本机操控")
         case "notify": return String(localized: "通知提醒")
         case "open": return String(localized: "打开链接")
         case "nlp": return String(localized: "文本分析")
@@ -454,6 +455,7 @@ struct NativeCapability: Identifiable {
     var detail: String {
         switch id {
         case "device": return String(localized: "机型、系统版本、电量、存储空间")
+        case "phone": return String(localized: "替你在这台手机上点按、输入、读屏。开关在「操控手机 → 本机操控」")
         case "notify": return String(localized: "按你的要求定时提醒你，App 关着也会响")
         case "open": return String(localized: "用对应的 App 打开地图、邮件草稿、电话号码或网页")
         case "nlp": return String(localized: "认语言、认出人名地名、按意思给一堆文字排序。全在本机算，不出手机")
