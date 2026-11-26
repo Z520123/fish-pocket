@@ -385,11 +385,7 @@ struct ConversationView: View {
                     if !blank { composerChips(model) }
                     }
                     .background(Palette.background, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Palette.control.opacity(0.9), lineWidth: 0.8)
-                    }
-                    .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
+                    .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
                 }
             }
             .padding(.horizontal, 12)
