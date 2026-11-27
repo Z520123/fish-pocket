@@ -440,6 +440,7 @@ struct BotHomeView: View {
             Section("Bot") {
                 ForEach(botList) { bot in
                     Button { pick(.bot(bot.id)) } label: { botRow(bot) }.buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
                 }
             }
         }
@@ -447,6 +448,7 @@ struct BotHomeView: View {
             Section("群聊") {
                 ForEach(roomList) { room in
                     Button { pick(.room(room.id)) } label: { roomRow(room) }.buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
                 }
             }
         }
@@ -454,11 +456,12 @@ struct BotHomeView: View {
             Section("私聊里说过的") {
                 ForEach(hits) { hit in
                     Button { pick(.bot(hit.botId)) } label: { hitRow(hit, team: team) }.buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
                 }
             }
         }
         if botList.isEmpty && roomList.isEmpty && hits.isEmpty {
-            Section { Text("没有找到「\(query)」").font(.footnote).foregroundStyle(Palette.secondary) }
+            Section { Text("没有找到「\(query)」").font(.footnote).foregroundStyle(Palette.secondary).listRowBackground(Color.clear) }
         }
     }
 
@@ -481,6 +484,7 @@ struct BotHomeView: View {
                 Label("另一个 DSH 正在管理这支团队，这里暂时只能看。", systemImage: "lock")
                     .font(.footnote).foregroundStyle(Palette.waiting)
                     .accessibilityHint(reason)
+                    .listRowBackground(Color.clear)
             }
         }
         if !entries.isEmpty { Section {
@@ -500,6 +504,7 @@ struct BotHomeView: View {
                 }
                 .font(.footnote)
                 .foregroundStyle(Palette.secondary)
+                .listRowBackground(Color.clear)
             }
         }
     }
@@ -598,12 +603,13 @@ struct BotHomeView: View {
     }
 
     /// The fill of a row beside the chat: the picked one's mark, clear on the others, as the 会话
-    /// list has it; the list's own (nil) where rows push. Every row beside the chat has one from
-    /// the start: the list keeps up only a background the row had as its cell was made. One that
-    /// first came with the picking was drawn once and left so, and after light turned to dark
-    /// (or back) the picked row stayed light under a name now white.
-    private func pickedFill(_ route: BotRoute) -> Color? {
-        selection.map { $0.wrappedValue == route ? Palette.bubble : .clear }
+    /// list has it; clear too where rows push. Every row has one from the start: the list keeps
+    /// up only a background the row had as its cell was made. One that first came with the
+    /// picking was drawn once and left so, and after light turned to dark (or back) the picked
+    /// row stayed light under a name now white. Left to the list (nil), a row was the system's
+    /// black in dark mode, darker than the page around it.
+    private func pickedFill(_ route: BotRoute) -> Color {
+        selection.map { $0.wrappedValue == route ? Palette.bubble : .clear } ?? .clear
     }
 
     @ViewBuilder
