@@ -369,7 +369,7 @@ struct ComposerView: View {
                 .closeButton { callSetup = false }
             }
         }
-        .sheet(isPresented: trayShown(sizeClass != .regular), onDismiss: sheetClosed) { tray }
+        .sheet(isPresented: trayShown(sizeClass != .regular), onDismiss: sheetClosed) { tray() }
         .sheet(isPresented: $showEditor, onDismiss: sheetClosed) {
             DraftEditor(composer: composer) {
                 afterSheet = { send(.preferred) }
@@ -541,8 +541,8 @@ struct ComposerView: View {
         .accessibilityLabel("添加附件、调用指令、切换模式")
         // A bottom sheet on a phone; with room to spare, a popover at the button.
         .popover(isPresented: trayShown(sizeClass == .regular), arrowEdge: .bottom) {
-            // A list has no height of its own to give a popover.
-            tray.frame(width: 380, height: 520)
+            // A list has no height of its own to give a popover: the tray says how tall (`ComposerTray.popover`).
+            tray(popover: true).frame(width: 380)
         }
     }
 
@@ -551,14 +551,15 @@ struct ComposerView: View {
         Binding(get: { here && showTray }, set: { if !$0 { showTray = false } })
     }
 
-    private var tray: some View {
+    private func tray(popover: Bool = false) -> some View {
         ComposerTray(
             model: model, context: context,
             camera: { leaveTray { showCamera = true } },
             photos: { leaveTray { showPhotos = true } },
             files: { leaveTray { showFiles = true } },
             pick: { candidate in leaveTray { pick(candidate, over: nil) } },
-            setPermission: applyPermission
+            setPermission: applyPermission,
+            popover: popover
         )
     }
 

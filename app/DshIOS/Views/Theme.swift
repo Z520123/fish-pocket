@@ -527,8 +527,10 @@ private struct StatusBarSoftening: View {
 
     var body: some View {
         // The window's top inset is the status bar (or the Dynamic Island's band); this view's own
-        // inset also holds the navigation bar, which is left clear.
-        let height = Self.statusBarHeight
+        // inset also holds the navigation bar, which is left clear. With no status bar along the
+        // top (iPhone Duo unfolded keeps it in a column at the side) the inset is next to nothing,
+        // and the messages were cut off hard at the screen's edge: a band of its own still fades them.
+        let height = max(Self.statusBarHeight, 24)
         Rectangle()
             .fill(.ultraThinMaterial)
             .overlay(Palette.background.opacity(0.35))

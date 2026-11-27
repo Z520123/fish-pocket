@@ -109,7 +109,7 @@ struct RemoteConversationView: View {
                 .padding(.top, 6)
                 .padding(.bottom, 8)
                 .readableWidth()
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { app.composerHeight = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { app.composerTop = $0 }
         }
         .navigationTitle(model.meta?.displayTitle ?? "")
         .navigationBarTitleDisplayMode(.inline)

@@ -9,9 +9,16 @@ struct ShellNotices: View {
     @Environment(\.noticesHosted) private var hosted
     /// The banner waits a moment so a quick reconnect never flashes it.
     @State private var showOffline = false
+    /// The bottom of the area these notices fill, in the window (global coordinates).
+    @State private var bottomEdge: CGFloat?
 
-    /// Over a sheet there is no composer, but there may be a bottom bar.
-    private var bottomInset: CGFloat { hosted ? 56 : app.composerHeight + 8 }
+    /// Over a sheet there is no composer, but there may be a bottom bar. Elsewhere, from the
+    /// composer's top: with the tab bar under the composer, its height alone fell short of it.
+    private var bottomInset: CGFloat {
+        if hosted { return 56 }
+        guard let bottomEdge, let top = app.composerTop else { return 8 }
+        return max(0, bottomEdge - top) + 8
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -40,6 +47,7 @@ struct ShellNotices: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, bottomInset)
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { bottomEdge = $0 }
         .animation(.snappy, value: app.toast)
         .animation(.snappy, value: ReadAloud.shared.speaking)
         .animation(.snappy, value: showOffline)
