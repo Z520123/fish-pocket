@@ -148,8 +148,10 @@ final class AppModel {
     var remoteSessionRequest: RemoteSessionTarget?
     /// Open the remote-control page: sign in, or the account's computers (the root view consumes it).
     var remoteRequest: UUID?
-    /// Height of the composer area on screen; the toast sits just above it.
-    var composerHeight: CGFloat = 0
+    /// Top of the composer area in the window (global coordinates); the toast and the read-aloud
+    /// bar sit just above it. Its height alone left out the tab bar under it, and they covered its
+    /// top edge.
+    var composerTop: CGFloat?
     /// Composer text waiting for a session to show it (appended to any draft there).
     var pendingDrafts: [String: String] = [:]
     /// A written question waiting for a session's composer to show it (询问 AI).
