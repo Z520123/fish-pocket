@@ -193,8 +193,12 @@ final class CallSynthesizer: @unchecked Sendable {
             "namespace": "BidirectionalTTS",
             "req_params": [
                 "speaker": voice,
-                // Opus only comes at 48 kHz; it is decoded to 24 kHz here.
-                "audio_params": ["format": "ogg_opus", "sample_rate": 48_000, "bit_rate": 64_000],
+                // Opus only comes at 48 kHz; it is decoded to 24 kHz here. speech_rate 是百分比，
+                // 0 就是音色本来的语速；不传的话「傲娇女友」会慢悠悠地念，一点脾气都没有。
+                "audio_params": [
+                    "format": "ogg_opus", "sample_rate": 48_000, "bit_rate": 64_000,
+                    "speech_rate": CallVoice.speechRate(for: voice),
+                ],
                 "additions": encoded,
             ],
         ]

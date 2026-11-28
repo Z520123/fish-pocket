@@ -18,6 +18,16 @@ struct CallVoice: Identifiable, Hashable {
     let name: String
     let female: Bool
     let english: Bool
+    /// 语速，按百分比，0 是不减速也不加速。有的音色默认说得太稳，「傲娇女友」这类要快一点才像话。
+    let rate: Int
+
+    init(id: String, name: String, female: Bool, english: Bool, rate: Int = 0) {
+        self.id = id
+        self.name = name
+        self.female = female
+        self.english = english
+        self.rate = rate
+    }
 
     var kind: String {
         if english { return female ? String(localized: "英语女声") : String(localized: "英语男声") }
@@ -26,7 +36,7 @@ struct CallVoice: Identifiable, Hashable {
 
     static let all: [CallVoice] = [
         CallVoice(id: "zh_female_vv_uranus_bigtts", name: "Vivi", female: true, english: false),
-        CallVoice(id: "ICL_uranus_zh_female_aojiaonvyou_tob", name: "傲娇女友", female: true, english: false),
+        CallVoice(id: "ICL_uranus_zh_female_aojiaonvyou_tob", name: "傲娇女友", female: true, english: false, rate: 25),
         CallVoice(id: "zh_female_xiaohe_uranus_bigtts", name: "小何", female: true, english: false),
         CallVoice(id: "zh_male_m191_uranus_bigtts", name: "云舟", female: false, english: false),
         CallVoice(id: "zh_male_taocheng_uranus_bigtts", name: "小天", female: false, english: false),
@@ -47,6 +57,11 @@ struct CallVoice: Identifiable, Hashable {
     static var chosen: CallVoice {
         get { all.first { $0.id == UserDefaults.standard.string(forKey: key) } ?? all[0] }
         set { UserDefaults.standard.set(newValue.id, forKey: key) }
+    }
+
+    /// 这个音色说话要多快，按百分比；不认识的音色就是 0，也就是它本来的速度。
+    static func speechRate(for id: String) -> Int {
+        all.first { $0.id == id }?.rate ?? 0
     }
 }
 
