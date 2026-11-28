@@ -24,7 +24,10 @@ struct DshIOSApp: App {
             RootView(session: window?.session)
                 .environmentObject(engine)
                 .toggleStyle(.appSwitch)
-                .onAppear { engine.start() }
+                .onAppear {
+                    engine.start()
+                    LocationKeepAlive.shared.resume()
+                }
         }
         .commands { ShellCommands() }
         .onChange(of: scenePhase) { _, phase in
@@ -36,6 +39,8 @@ struct DshIOSApp: App {
             LiveActivityController.shared.scenePhaseChanged(to: phase)
             WatchLink.shared.scenePhaseChanged(to: phase)
             PhoneRecorder.shared.scenePhaseChanged(to: phase)
+            // 定位保活默认开着：回到前台就把定位更新接上，退到后台才不会被挂起。
+            if phase == .active { LocationKeepAlive.shared.resume() }
         }
     }
 }

@@ -342,8 +342,15 @@ extension PhoneLink: NetServiceDelegate {
 /// 页面上的说明和它一致。
 final class LocationKeepAlive: NSObject, CLLocationManagerDelegate {
     static let shared = LocationKeepAlive()
+    /// 用户的意思记在这里：没选过就是开着的，App 退到后台别被挂起。
+    static let key = "locationKeepAlive"
     private let manager = CLLocationManager()
     private(set) var running = false
+
+    /// 用户要不要它开着；重装或没动过的时候默认开。
+    var wanted: Bool {
+        UserDefaults.standard.object(forKey: Self.key) as? Bool ?? true
+    }
 
     private override init() {
         super.init()
@@ -354,7 +361,15 @@ final class LocationKeepAlive: NSObject, CLLocationManagerDelegate {
         manager.allowsBackgroundLocationUpdates = true
     }
 
+    /// App 回到前台时调一次：要开着就重新开起来。系统在后台结束过它、或者刚启动时都靠这个。
+    func resume() {
+        guard wanted, !running else { return }
+        setRunning(true)
+    }
+
     func setRunning(_ on: Bool) {
+        // 先把意思记下来，再决定要不要动定位：重开 App 时照这个恢复。
+        UserDefaults.standard.set(on, forKey: Self.key)
         guard on != running else { return }
         running = on
         if on {
