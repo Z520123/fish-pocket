@@ -26,6 +26,7 @@ struct CallVoice: Identifiable, Hashable {
 
     static let all: [CallVoice] = [
         CallVoice(id: "zh_female_vv_uranus_bigtts", name: "Vivi", female: true, english: false),
+        CallVoice(id: "ICL_uranus_zh_female_aojiaonvyou_tob", name: "傲娇女友", female: true, english: false),
         CallVoice(id: "zh_female_xiaohe_uranus_bigtts", name: "小何", female: true, english: false),
         CallVoice(id: "zh_male_m191_uranus_bigtts", name: "云舟", female: false, english: false),
         CallVoice(id: "zh_male_taocheng_uranus_bigtts", name: "小天", female: false, english: false),
