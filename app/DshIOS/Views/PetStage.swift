@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 桌宠：站在聊天页底部，可以左右拖着走，点一下有反应。
+/// 桌宠：站在聊天页底部，可以拖着走，点一下有反应；闲下来会在整屏来回溜达，
+/// 走到边上会掉头并弹一下。
 ///
 /// 内置的是 dsh-Go 的 Deepy 小鲸鱼（图集在 bundle 根目录，数据写死）；
 /// 装了宠物包以后改读 `pack.json`，图和帧表都用包里的。
@@ -9,18 +10,27 @@ struct PetStage: View {
     var mood: PetMood = .idle
     /// 美术像素到点的倍率，三档大小。
     @AppStorage("dsh.pet.size") private var sizeRaw = 1
-    /// 相对右边缘向左挪了多少点，拖动后记住。
-    @AppStorage("dsh.pet.offsetX") private var storedX = 0.0
+    /// 站在左边缘往右多远（0…1）。走过去、拖过以后记住这一处。
+    @AppStorage("dsh.pet.xRatio") private var storedRatio = 0.5
 
     @ObservedObject private var store = PetStore.shared
     /// 外部（链接、快捷指令、智能体工具）要求做的动作。
     @ObservedObject private var bus = PetBus.shared
 
-    /// 待机久了挪两步。
-    @State private var roaming = false
     @State private var idleTicks = 0
     /// 这一次待机走动的门槛，每回走完重掷。
-    @State private var roamAfter = Int.random(in: 140...380)
+    @State private var roamAfter = Int.random(in: 90...260)
+    /// 走动中的位置（比例），nil 表示没在走，用 `storedRatio`。
+    @State private var liveRatio: CGFloat? = nil
+    /// 这一趟要去哪（比例）；nil 表示没在走。
+    @State private var roamGoal: CGFloat? = nil
+    /// 刚撞到哪边：-1 左、1 右、0 没撞。
+    @State private var hitEdge = 0
+    /// 撞边时往上弹起的高度。
+    @State private var pop: CGFloat = 0
+    /// 舞台和宠物的宽度，给走动用（GeometryReader 里量到就记下）。
+    @State private var stageWidth: CGFloat = 390
+    @State private var petWidth: CGFloat = 100
     /// 点一下的反应：内置那只和宠物包各存一份，类型不同。
     @State private var builtinReaction: PetAnimation?
     @State private var packReaction: PetAnim?
@@ -51,7 +61,11 @@ struct PetStage: View {
             let margin: CGFloat = 10
             let leftEdge = w / 2 + 4
             let rightEdge = max(leftEdge, geo.size.width - w / 2 - margin)
-            let x = min(max(rightEdge + storedX + dragX, leftEdge), rightEdge)
+            // 位置按「从左边缘往右走了几分之几」算：走动只是改这个比例，
+            // 不会像累加偏移那样一路漂到左边出不来。
+            let span = max(rightEdge - leftEdge, 1)
+            let baseRatio = min(max(liveRatio ?? CGFloat(storedRatio), 0), 1)
+            let x = leftEdge + min(max(baseRatio + dragX / span, 0), 1) * span
 
             VStack(spacing: 2) {
                 if let bubble = bus.text ?? bubble {
@@ -67,26 +81,35 @@ struct PetStage: View {
             }
             .fixedSize()
             .contentShape(Rectangle())
-            // 拖：跟着手指走，松手把新位置记住（相对右边缘，负数是往左）。
+            // 拖：跟着手指走，松手把这一处记住（按比例存，换屏幕也不会跑到屏幕外）。
             .gesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in dragX = value.translation.width }
                     .onEnded { _ in
-                        storedX = min(max(storedX + dragX, -2000), 0)
+                        let width = max(rightEdge - leftEdge, 1)
+                        let base = liveRatio ?? CGFloat(storedRatio)
+                        storedRatio = Double(min(max(base + dragX / width, 0), 1))
+                        liveRatio = nil
+                        roamGoal = nil
                         dragX = 0
                     }
             )
             .onTapGesture { tap() }
-            .position(x: x, y: geo.size.height - h / 2)
+            .position(x: x, y: geo.size.height - h / 2 - pop)
+            .onAppear { stageWidth = geo.size.width; petWidth = w }
+            .onChange(of: geo.size.width) { _, new in stageWidth = new }
+            .onChange(of: w) { _, new in petWidth = new }
         }
         .onReceive(clock) { _ in
             // 反应动画也照常播帧：只显示第一帧的话，看着像卡住了。
             frame = (frame + 1) % max(currentSpec.anim.indexes.count, 1)
-            // 闲下来了就隔一阵挪两步：不动的话桌宠看着像张画。
             let quiet = mood == .idle && bus.action == nil && builtinReaction == nil && packReaction == nil && !celebrating
-            if quiet, !roaming {
+            // 在走的这一趟：一步一步挪过去，撞到边就掉头。
+            if roamGoal != nil {
+                if quiet { step() } else { stopWalk() }
+            } else if quiet {
                 idleTicks += 1
-                if idleTicks >= roamAfter { roam() }
+                if idleTicks >= roamAfter { startWalk() }
             } else {
                 idleTicks = 0
             }
@@ -108,7 +131,7 @@ struct PetStage: View {
             }
         }
         .accessibilityLabel(Text("桌宠"))
-        .accessibilityHint(Text("点一下有反应，可以左右拖"))
+        .accessibilityHint(Text("点一下有反应，可以拖着换地方；闲下来它自己在屏幕上走"))
     }
 
     /// 现在该画哪一只：点一下的反应 > 宠物包 > 内置，按当前状态取动作。
@@ -116,6 +139,16 @@ struct PetStage: View {
         if !store.usingBuiltin, let pack = store.current {
             if let packReaction, let image = store.image(for: packReaction) {
                 return PetSpec(image: image, anim: packReaction)
+            }
+            // 走路、撞边各有一段自己的动画，包里有就先播它。
+            var moving: String? = nil
+            if hitEdge != 0 {
+                moving = hitEdge < 0 ? "react-left" : "react-right"
+            } else if roamGoal != nil {
+                moving = "roam-hop"
+            }
+            if let moving, let anim = pack.animations[moving], let image = store.image(for: anim) {
+                return PetSpec(image: image, anim: anim)
             }
             let key = (bus.action ?? mood).packKey
             let fallback = pack.animations["idle"] != nil ? "idle" : (pack.animations.keys.sorted().first ?? "idle")
@@ -127,12 +160,13 @@ struct PetStage: View {
         return PetSpec(image: builtin.image(), anim: builtin.anim)
     }
 
-    /// 内置那只现在该播哪一段：反应 > 干完活的开心 > 状态本身。
+    /// 内置那只现在该播哪一段：反应 > 干完活的开心 > 撞边 > 走路 > 状态本身。
     private var builtinAnimation: PetAnimation {
         if let action = bus.action { return animation(for: action) }
         if let builtinReaction { return builtinReaction }
         if celebrating { return .happy }
-        if roaming { return .roamHop }
+        if hitEdge != 0 { return hitEdge < 0 ? .reactLeft : .reactRight }
+        if roamGoal != nil { return .roamHop }
         return animation(for: mood)
     }
 
@@ -147,19 +181,79 @@ struct PetStage: View {
         }
     }
 
-    /// 待机久了跳两步：播 `roam-hop`，位置也挪一段，走完继续待机。
-    private func roam() {
+    /// 挑一个新去处，走起来：满屏都可能去，不再只在一小段里抖。
+    private func startWalk() {
         idleTicks = 0
-        roamAfter = Int.random(in: 140...380)
-        roaming = true
-        let delta = Bool.random() ? CGFloat.random(in: 36...88) : -CGFloat.random(in: 36...88)
-        withAnimation(.easeInOut(duration: 0.9)) {
-            storedX = min(max(storedX + delta, -2000), 0)
+        roamAfter = Int.random(in: 90...260)
+        let now = liveRatio ?? CGFloat(storedRatio)
+        var goal = CGFloat.random(in: 0...1)
+        // 太近就别挪了，改在远处重新挑一个。
+        for _ in 0..<6 where abs(goal - now) < 0.25 {
+            goal = CGFloat.random(in: 0...1)
         }
+        roamGoal = goal
+        frame = 0
+    }
+
+    /// 走一步：朝 `roamGoal` 挪一点；碰到左右边就掉头、弹一下、说一句。
+    private func step() {
+        guard let goal = roamGoal, stageWidth > 0 else { return }
+        let half = petWidth / 2
+        let leftEdge = half + 4
+        let rightEdge = max(leftEdge, stageWidth - half - 10)
+        let span = max(rightEdge - leftEdge, 1)
+        let now = liveRatio ?? CGFloat(storedRatio)
+        let stride = 1.8 / span          // 每 0.05 秒走 1.8 点
+        var next = now + (goal >= now ? stride : -stride)
+        var hit = 0
+        if next <= 0 { next = 0; hit = -1 }
+        if next >= 1 { next = 1; hit = 1 }
+
+        if hit != 0 {
+            // 撞到边：掉头往回走，往上弹一下，头顶说一句。
+            liveRatio = next
+            hitEdge = hit
+            roamGoal = hit < 0 ? CGFloat.random(in: 0.45...1) : CGFloat.random(in: 0...0.55)
+            Haptics.tap()
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { pop = 9 }
+            bubble = ["哎哟", "到边了", "这边过不去", "撞墙了"].randomElement()
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.9))
+                withAnimation(.easeOut(duration: 0.2)) { pop = 0 }
+                hitEdge = 0
+                frame = 0
+            }
+            return
+        }
+
+        liveRatio = next
+        // 到地方了：站住，三成概率乐一下。
+        if abs(goal - next) < stride / 2 {
+            storedRatio = Double(next)
+            liveRatio = nil
+            roamGoal = nil
+            frame = 0
+            if Bool.random() { cheer() }
+        }
+    }
+
+    /// 到了地方，开心一小会儿。
+    private func cheer() {
+        guard mood == .idle else { return }
+        celebrating = true
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.4))
-            roaming = false
+            try? await Task.sleep(for: .seconds(1.6))
+            celebrating = false
+            frame = 0
         }
+    }
+
+    /// 有活了：停在原地，把位置记下来。
+    private func stopWalk() {
+        if let live = liveRatio { storedRatio = Double(live) }
+        liveRatio = nil
+        roamGoal = nil
+        frame = 0
     }
 
     /// 一张图集按格切：整张图缩到「每格 = box 的大小」，再平移到当前格，外面裁一个 box 大的窗口。
